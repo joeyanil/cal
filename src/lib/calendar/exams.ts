@@ -108,6 +108,7 @@ export function checkExamHardStops(
       issues.push({
         severity: 'ERROR',
         code: 'CALENDAR_EXAM_ON_WEEKEND',
+        date,
         message: `Exam window includes ${date}, which is a weekend day. Exams cannot run on Saturday or Sunday.`,
       })
       continue
@@ -117,6 +118,7 @@ export function checkExamHardStops(
       issues.push({
         severity: 'ERROR',
         code: 'CALENDAR_EXAM_ON_CLOSING_HOLIDAY',
+        date,
         message: `Exam window includes ${date}, which is a school-closing holiday.`,
         ref: { kind: 'HOLIDAY_OCCURRENCE', holidayTypeKey: closingHoliday.holidayTypeKey },
       })
@@ -139,6 +141,7 @@ export function checkExamHardStops(
         issues.push({
           severity: 'ERROR',
           code: 'CALENDAR_EXAM_IN_HOLIDAY_WEEK',
+          date: day,
           message: `Exam week of ${monday} contains a school-closing holiday on ${day}. No exams are allowed in a holiday week.`,
           ref: { kind: 'HOLIDAY_OCCURRENCE', holidayTypeKey: holiday.holidayTypeKey },
         })
@@ -199,21 +202,29 @@ export function checkExamCrossesSemesterBoundary(
 }
 
 /**
- * UX improvement — "shift suggestion" for a hard-stop violation (mission
- * item 9's weekend/closing-holiday rejection still applies unchanged; this
- * only adds a *suggestion* layer on top of it). Today an admin who enters
- * a window that lands on a weekend or a closing holiday gets a rejection
- * and has to manually count days back or forward in their head. This
- * computes, in both directions, the nearest same-length window that clears
- * every hard stop, so the UI can offer "move 2 days earlier" / "move 5 days
- * later" as one-click choices instead of trial-and-error retyping.
+ * Smart placement help for whoever is typing an exam date.
  *
- * Never applied automatically — mirrors the engine's existing rule that
- * Calendar "must not silently move... to resolve a conflict" (exams.ts
- * checkExamCrossesSemesterBoundary comment, same principle applied here to
- * hard stops instead of a WARNING-level conflict). This function only
- * proposes; a human still clicks to accept.
+ * `analyzeExamWindow` looks at the window the admin entered and answers, in
+ * one call: what is wrong with it (hard stops), what is merely worth a
+ * second look (warnings), and — if anything is wrong — the nearest windows
+ * that fix it. The same function runs live in the form and on the server, so
+ * what the admin sees before pressing Save is exactly what Save enforces.
+ *
+ * A suggested window is only ever offered if it passes every hard stop,
+ * stays inside the exam's own semester (or the academic year when the exam
+ * has no semester), and does not collide with another school-closing exam.
+ * It is never applied automatically: a human clicks to accept it.
  */
+export interface ExamWindowContext {
+  holidaysByDate: Map<ISODate, HolidayOccurrence[]>
+  semesters?: Semester[]
+  academicYear?: { startDate: ISODate; endDate: ISODate } | null
+  /** Every OTHER exam in the year (exclude the one being edited). */
+  otherExams?: Pick<ExamInstance, 'examTypeKey' | 'startDate' | 'endDate'>[]
+  /** How far to search each way. Default 60 days. */
+  maxSearchDays?: number
+}
+
 export interface ExamShiftSuggestion {
   direction: 'EARLIER' | 'LATER'
   offsetDays: number // always positive; magnitude of the shift
@@ -221,51 +232,139 @@ export interface ExamShiftSuggestion {
   endDate: ISODate
 }
 
-/**
- * Searches outward from the originally-requested window, one day at a time
- * in each direction, for the nearest window of the same length that is
- * entirely free of weekends and closing holidays. Caps the search (default
- * 60 days each way) so a pathological all-holidays stretch can't loop
- * forever — if nothing is found within the cap, that direction is simply
- * omitted rather than guessed at.
- */
-export function suggestExamShift(
-  instance: Pick<ExamInstance, 'startDate' | 'endDate'>,
-  holidaysByDate: Map<ISODate, HolidayOccurrence[]>,
-  maxSearchDays = 60,
-): ExamShiftSuggestion[] {
-  const suggestions: ExamShiftSuggestion[] = []
+export interface ExamWindowAnalysis {
+  /** Hard stops — Save would be rejected. */
+  problems: ValidationIssue[]
+  /** Allowed but worth attention (crosses semester, overlaps another exam). */
+  warnings: ValidationIssue[]
+  /** Set when start is after end: the same two dates the right way round. */
+  swapped: { startDate: ISODate; endDate: ISODate } | null
+  /** Nearest clean windows, nearest first. Empty when none exists. */
+  suggestions: ExamShiftSuggestion[]
+  /** True when something needs fixing but no clean window was found within
+   *  the search range — the UI should say so instead of showing nothing. */
+  noWindowFound: boolean
+}
 
-  // Same rules the save enforces (weekend, closing holiday, holiday week),
-  // so a suggestion is never rejected when the admin accepts it.
-  function windowIsClean(start: ISODate, end: ISODate): boolean {
-    return checkExamHardStops({ startDate: start, endDate: end }, holidaysByDate).length === 0
+function boundsFor(
+  examTypeKey: ExamTypeKey | undefined,
+  ctx: ExamWindowContext,
+): { startDate: ISODate; endDate: ISODate } | null {
+  const order = examTypeKey ? EXAM_TYPES[examTypeKey].semesterOrder : null
+  if (order !== null) {
+    const sem = ctx.semesters?.find((x) => x.order === order)
+    if (sem?.startDate && sem?.endDate) return { startDate: sem.startDate, endDate: sem.endDate }
+  }
+  return ctx.academicYear ?? null
+}
+
+function overlapWarnings(
+  instance: Pick<ExamInstance, 'startDate' | 'endDate'> & { examTypeKey?: ExamTypeKey },
+  ctx: ExamWindowContext,
+): ValidationIssue[] {
+  if (!instance.examTypeKey || !EXAM_TYPES[instance.examTypeKey].closesSchool) return []
+  const out: ValidationIssue[] = []
+  for (const other of ctx.otherExams ?? []) {
+    if (other.examTypeKey === instance.examTypeKey || !EXAM_TYPES[other.examTypeKey].closesSchool) continue
+    if (isSameOrBefore(instance.startDate, other.endDate) && isSameOrBefore(other.startDate, instance.endDate)) {
+      out.push({
+        severity: 'WARNING',
+        code: 'CALENDAR_EXAM_OVERLAPS_OTHER_EXAM',
+        message: `This window overlaps ${EXAM_TYPES[other.examTypeKey].name} (${other.startDate} \u2013 ${other.endDate}).`,
+        date: other.startDate,
+        ref: { kind: 'EXAM_START', examTypeKey: other.examTypeKey },
+      })
+    }
+  }
+  return out
+}
+
+function insideBounds(
+  start: ISODate,
+  end: ISODate,
+  bounds: { startDate: ISODate; endDate: ISODate } | null,
+): boolean {
+  return !bounds || (isSameOrBefore(bounds.startDate, start) && isSameOrBefore(end, bounds.endDate))
+}
+
+export function analyzeExamWindow(
+  instance: Pick<ExamInstance, 'startDate' | 'endDate'> & { examTypeKey?: ExamTypeKey },
+  ctx: ExamWindowContext,
+): ExamWindowAnalysis {
+  const maxSearchDays = ctx.maxSearchDays ?? 60
+  const bounds = boundsFor(instance.examTypeKey, ctx)
+
+  // Start after end: offer the swap, then analyse the corrected window so
+  // shift suggestions are built from what the admin most likely meant.
+  const reversed = isBefore(instance.endDate, instance.startDate)
+  const swapped = reversed ? { startDate: instance.endDate, endDate: instance.startDate } : null
+  const window = swapped ?? { startDate: instance.startDate, endDate: instance.endDate }
+
+  const problems: ValidationIssue[] = reversed
+    ? checkExamHardStops(instance, ctx.holidaysByDate)
+    : checkExamHardStops(window, ctx.holidaysByDate)
+
+  const warnings: ValidationIssue[] = []
+  if (!reversed) {
+    if (instance.examTypeKey) {
+      warnings.push(...checkExamCrossesSemesterBoundary({ ...window, examTypeKey: instance.examTypeKey }, ctx.semesters ?? []))
+    }
+    if (bounds && !insideBounds(window.startDate, window.endDate, bounds) && warnings.length === 0) {
+      warnings.push({
+        severity: 'WARNING',
+        code: 'CALENDAR_EXAM_OUTSIDE_YEAR',
+        message: `This window (${window.startDate} \u2013 ${window.endDate}) is outside the academic year.`,
+      })
+    }
+    warnings.push(...overlapWarnings({ ...window, examTypeKey: instance.examTypeKey }, ctx))
   }
 
-  // No suggestion needed — the requested window already clears both hard
-  // stops, so there is nothing to shift.
-  if (windowIsClean(instance.startDate, instance.endDate)) return []
+  const needsHelp = problems.length > 0 || warnings.length > 0 || reversed
+  if (!needsHelp) {
+    return { problems, warnings, swapped: null, suggestions: [], noWindowFound: false }
+  }
 
-  // direction: -1 = earlier, +1 = later
+  const closing = instance.examTypeKey ? EXAM_TYPES[instance.examTypeKey].closesSchool : true
+  function isClean(start: ISODate, end: ISODate): boolean {
+    if (checkExamHardStops({ startDate: start, endDate: end }, ctx.holidaysByDate).length > 0) return false
+    if (!insideBounds(start, end, bounds)) return false
+    if (closing && overlapWarnings({ startDate: start, endDate: end, examTypeKey: instance.examTypeKey }, ctx).length > 0) {
+      return false
+    }
+    return true
+  }
+
+  const suggestions: ExamShiftSuggestion[] = []
   for (const dir of [-1, 1] as const) {
     for (let offset = 1; offset <= maxSearchDays; offset++) {
-      const candidateStart = addDays(instance.startDate, dir * offset)
-      const candidateEnd = addDays(instance.endDate, dir * offset)
-      if (windowIsClean(candidateStart, candidateEnd)) {
-        suggestions.push({
-          direction: dir === -1 ? 'EARLIER' : 'LATER',
-          offsetDays: offset,
-          startDate: candidateStart,
-          endDate: candidateEnd,
-        })
+      const start = addDays(window.startDate, dir * offset)
+      const end = addDays(window.endDate, dir * offset)
+      if (isClean(start, end)) {
+        suggestions.push({ direction: dir === -1 ? 'EARLIER' : 'LATER', offsetDays: offset, startDate: start, endDate: end })
         break
       }
     }
   }
+  suggestions.sort((a, b) => a.offsetDays - b.offsetDays)
 
-  // Nearest side first regardless of direction, so the UI's default/first
-  // suggestion is always "the smallest change that fixes it."
-  return suggestions.sort((a, b) => a.offsetDays - b.offsetDays)
+  // A swap that is itself clean is the simplest fix; don't also bury it.
+  const swapIsClean = swapped ? isClean(swapped.startDate, swapped.endDate) : false
+  return {
+    problems,
+    warnings,
+    swapped,
+    suggestions: swapIsClean ? [] : suggestions,
+    noWindowFound: !swapIsClean && suggestions.length === 0,
+  }
+}
+
+/** Thin wrapper kept for callers that only want the shift suggestions. */
+export function suggestExamShift(
+  instance: Pick<ExamInstance, 'startDate' | 'endDate'> & { examTypeKey?: ExamTypeKey },
+  holidaysByDate: Map<ISODate, HolidayOccurrence[]>,
+  options: Omit<ExamWindowContext, 'holidaysByDate'> = {},
+): ExamShiftSuggestion[] {
+  return analyzeExamWindow(instance, { holidaysByDate, ...options }).suggestions
 }
 
 export interface TimelineExamHit {

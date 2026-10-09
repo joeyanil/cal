@@ -318,6 +318,9 @@ export interface ValidationIssue {
   message: string
   ref?: CalendarFactRef
   relatedRefs?: CalendarFactRef[]
+  /** The specific date this issue is about, when there is one — lets a UI
+   *  show it in Ethiopian form instead of parsing it out of `message`. */
+  date?: ISODate
 }
 
 // ---------------------------------------------------------------------------

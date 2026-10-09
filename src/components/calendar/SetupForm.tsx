@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '../ui/button'
 import { Panel } from '../ui/panel'
@@ -10,11 +10,15 @@ import {
   STANDARD_EXAM_KEYS,
   GRADE12_EXAM_KEY,
   indexHolidaysByDate,
-  suggestExamShift,
-  formatEthiopian,
+  analyzeExamWindow,
+  toEthiopian,
+  ETHIOPIAN_MONTH_NAMES_EN,
   isoDate,
+  weekdayName,
+  HOLIDAY_TYPES,
 } from '@/lib/calendar'
 import type {
+  ISODate,
   AcademicYear,
   Semester,
   SemesterOrder,
@@ -24,6 +28,7 @@ import type {
   ExamTypeKey,
   ExamShiftSuggestion,
   StudentReturnDay,
+  ValidationIssue,
 } from '@/lib/calendar'
 
 interface Props {
@@ -258,14 +263,68 @@ function MovableHolidayForm({
   )
 }
 
-/**
- * Formats a shift suggestion as something an admin reads at a glance:
- * direction, Ethiopian start/end, and how many days away. Nothing here
- * needs i18n beyond what formatEthiopian already gives us.
- */
+/** "Hidar 5" — Ethiopian month and day only; the year is already stated at
+ *  the top of the page. */
+function shortEc(date: ISODate): string {
+  const ec = toEthiopian(date)
+  return `${ETHIOPIAN_MONTH_NAMES_EN[ec.month - 1]} ${ec.day}`
+}
+
+function dayName(date: ISODate): string {
+  const w = weekdayName(date).toLowerCase()
+  return w.charAt(0).toUpperCase() + w.slice(1)
+}
+
+/** Plain-English lines for a set of issues. Consecutive weekend days (a
+ *  Saturday and Sunday) are merged into one line instead of two. */
+function problemLines(issues: ValidationIssue[]): { text: string; error: boolean }[] {
+  const lines: { text: string; error: boolean }[] = []
+  const weekendDates = issues.filter((i) => i.code === 'CALENDAR_EXAM_ON_WEEKEND' && i.date).map((i) => i.date!)
+  if (weekendDates.length > 0) {
+    const first = weekendDates[0]!
+    const last = weekendDates[weekendDates.length - 1]!
+    lines.push({
+      text:
+        weekendDates.length === 1
+          ? `${shortEc(first)} (${dayName(first)}) is a weekend \u2014 no exams on Saturday or Sunday.`
+          : `${shortEc(first)} \u2013 ${shortEc(last)} includes a weekend (${dayName(first)}\u2013${dayName(last)}) \u2014 no exams on Saturday or Sunday.`,
+      error: true,
+    })
+  }
+  for (const i of issues) {
+    if (i.code === 'CALENDAR_EXAM_ON_WEEKEND') continue
+    lines.push({ text: problemText(i), error: i.severity === 'ERROR' })
+  }
+  return lines
+}
+
+/** One plain-English line per problem, with Ethiopian dates. */
+function problemText(issue: ValidationIssue): string {
+  const when = issue.date ? `${shortEc(issue.date)} (${dayName(issue.date)})` : ''
+  const holiday = issue.ref && 'holidayTypeKey' in issue.ref ? HOLIDAY_TYPES[issue.ref.holidayTypeKey]?.name : null
+  switch (issue.code) {
+    case 'CALENDAR_EXAM_ON_WEEKEND':
+      return `${when} is a weekend \u2014 no exams on Saturday or Sunday.`
+    case 'CALENDAR_EXAM_ON_CLOSING_HOLIDAY':
+      return `${when} is a school holiday${holiday ? ` (${holiday})` : ''}.`
+    case 'CALENDAR_EXAM_IN_HOLIDAY_WEEK':
+      return `That week has a holiday on ${when}${holiday ? ` (${holiday})` : ''} \u2014 no exams in a holiday week.`
+    case 'CALENDAR_EXAM_INVALID_RANGE':
+      return 'The end date is before the start date.'
+    case 'CALENDAR_EXAM_CROSSES_SEMESTER_BOUNDARY':
+      return 'This window goes outside its semester.'
+    case 'CALENDAR_EXAM_OUTSIDE_YEAR':
+      return 'This window is outside the school year.'
+    case 'CALENDAR_EXAM_OVERLAPS_OTHER_EXAM':
+      return `This overlaps another exam${issue.date ? ` starting ${shortEc(issue.date)}` : ''}.`
+    default:
+      return issue.message
+  }
+}
+
 function describeSuggestion(s: ExamShiftSuggestion): string {
   const dirLabel = s.direction === 'EARLIER' ? 'earlier' : 'later'
-  return `${s.offsetDays}d ${dirLabel} \u2192 ${formatEthiopian(s.startDate)} \u2013 ${formatEthiopian(s.endDate)}`
+  return `${s.offsetDays} day${s.offsetDays === 1 ? '' : 's'} ${dirLabel}: ${shortEc(s.startDate)} \u2013 ${shortEc(s.endDate)}`
 }
 
 function ExamForm({
@@ -274,49 +333,50 @@ function ExamForm({
   existing,
   yearEc,
   holidays,
+  semesters,
+  exams,
+  year,
 }: {
   yearId: string
   examKey: ExamTypeKey
   existing?: ExamInstance
   yearEc: number
   holidays: HolidayOccurrence[]
+  semesters: Semester[]
+  exams: ExamInstance[]
+  year: AcademicYear
 }) {
   const { status, dirty, setDirty, save } = useSectionSave()
-  // Holds the suggestions computed after a rejected save, and a remount
-  // key so applying one can reset the (uncontrolled) date fields to the
-  // suggested dates without hand-rolling controlled-input plumbing here.
-  const [suggestions, setSuggestions] = useState<ExamShiftSuggestion[]>([])
-  const [fieldValues, setFieldValues] = useState({ startDate: existing?.startDate ?? '', endDate: existing?.endDate ?? '' })
+  const [values, setValues] = useState<{ start: string; end: string }>({
+    start: existing?.startDate ?? '',
+    end: existing?.endDate ?? '',
+  })
+  // Remount key: applying a suggestion resets the (uncontrolled) date fields.
   const [fieldsKey, setFieldsKey] = useState(0)
+  const [defaults, setDefaults] = useState({ start: existing?.startDate ?? '', end: existing?.endDate ?? '' })
 
-  function handleSubmit(startDate: string, endDate: string) {
-    void save(
-      () =>
-        post(`/api/v1/academic-years/${yearId}/exams`, 'PUT', {
-          examTypeKey: examKey,
-          startDate,
-          endDate,
-        }),
-      (err) => {
-        const code = err instanceof Error && 'code' in err ? (err as { code: string }).code : undefined
-        if (code === 'CALENDAR_EXAM_ON_WEEKEND' || code === 'CALENDAR_EXAM_ON_CLOSING_HOLIDAY' || code === 'CALENDAR_EXAM_IN_HOLIDAY_WEEK') {
-          setSuggestions(
-            suggestExamShift({ startDate: isoDate(startDate), endDate: isoDate(endDate) }, indexHolidaysByDate(holidays)),
-          )
-        } else {
-          setSuggestions([])
-        }
+  // Live check while typing: same function the server runs on Save.
+  const analysis = useMemo(() => {
+    if (!values.start || !values.end) return null
+    return analyzeExamWindow(
+      { examTypeKey: examKey, startDate: isoDate(values.start), endDate: isoDate(values.end) },
+      {
+        holidaysByDate: indexHolidaysByDate(holidays),
+        semesters,
+        academicYear: { startDate: year.startDate, endDate: year.endDate },
+        otherExams: exams.filter((e) => e.examTypeKey !== examKey),
       },
     )
-  }
+  }, [values, examKey, holidays, semesters, exams, year])
 
-  function applySuggestion(s: ExamShiftSuggestion) {
-    // Suggestions are offered, never applied automatically (same rule the
-    // engine already holds for every other auto-derived date, e.g.
-    // rollover.ts) — this only fills the fields in; the admin still has to
-    // review and press Save.
-    setFieldValues({ startDate: s.startDate, endDate: s.endDate })
-    setSuggestions([])
+  const blocked = !!analysis && analysis.problems.length > 0
+  const hasHelp = !!analysis && (analysis.problems.length > 0 || analysis.warnings.length > 0 || !!analysis.swapped)
+
+  function applyWindow(startDate: string, endDate: string) {
+    // Offered, never applied automatically: this only fills the fields in;
+    // the admin still reviews and presses Save.
+    setDefaults({ start: startDate, end: endDate })
+    setValues({ start: startDate, end: endDate })
     setDirty(true)
     setFieldsKey((k) => k + 1)
   }
@@ -327,8 +387,15 @@ function ExamForm({
         className="flex flex-wrap items-end gap-3"
         onSubmit={(e) => {
           e.preventDefault()
+          if (blocked) return // the box below already says why
           const form = new FormData(e.currentTarget)
-          handleSubmit(String(form.get('startDate') ?? ''), String(form.get('endDate') ?? ''))
+          void save(() =>
+            post(`/api/v1/academic-years/${yearId}/exams`, 'PUT', {
+              examTypeKey: examKey,
+              startDate: form.get('startDate'),
+              endDate: form.get('endDate'),
+            }),
+          )
         }}
       >
         <span className="w-40 text-sm">{examKey}</span>
@@ -337,32 +404,62 @@ function ExamForm({
           label="Start"
           name="startDate"
           ethiopianYear={yearEc}
-          defaultValue={fieldValues.startDate}
+          defaultValue={defaults.start}
           onChange={() => setDirty(true)}
+          onValueChange={(v) => setValues((p) => ({ ...p, start: v }))}
         />
         <EthiopianDateField
           key={`end-${fieldsKey}`}
           label="End"
           name="endDate"
           ethiopianYear={yearEc}
-          defaultValue={fieldValues.endDate}
+          defaultValue={defaults.end}
           onChange={() => setDirty(true)}
+          onValueChange={(v) => setValues((p) => ({ ...p, end: v }))}
         />
-        <SaveButton status={status} dirty={dirty} />
+        <SaveButton status={status} dirty={dirty && !blocked} />
       </form>
-      {suggestions.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 pl-[calc(10rem+0.75rem)] text-xs">
-          <span className="text-muted-foreground">That window hits a weekend, a holiday, or a holiday week. Nearest open window:</span>
-          {suggestions.map((s) => (
-            <button
-              key={s.direction}
-              type="button"
-              onClick={() => applySuggestion(s)}
-              className="rounded border border-input bg-background px-2 py-1 font-medium hover:bg-accent"
-            >
-              {describeSuggestion(s)}
-            </button>
+
+      {analysis && hasHelp && (
+        <div
+          role="status"
+          className={`ml-0 space-y-1.5 rounded-md border px-3 py-2 text-xs sm:ml-[calc(10rem+0.75rem)] ${
+            blocked ? 'border-error-text/40' : 'border-input'
+          }`}
+        >
+          {problemLines([...analysis.problems, ...analysis.warnings]).map((line, i) => (
+            <p key={i} className={line.error ? 'font-medium text-error-text' : 'text-muted-foreground'}>
+              {line.error ? '\u26D4 ' : '\u26A0 '}
+              {line.text}
+            </p>
           ))}
+          <div className="flex flex-wrap items-center gap-2">
+            {analysis.swapped && (
+              <button
+                type="button"
+                onClick={() => applyWindow(analysis.swapped!.startDate, analysis.swapped!.endDate)}
+                className="rounded border border-input bg-background px-2 py-1 font-medium hover:bg-accent"
+              >
+                Swap: {shortEc(analysis.swapped.startDate)} – {shortEc(analysis.swapped.endDate)}
+              </button>
+            )}
+            {analysis.suggestions.length > 0 && <span className="text-muted-foreground">Nearest open window:</span>}
+            {analysis.suggestions.map((sg) => (
+              <button
+                key={sg.direction}
+                type="button"
+                onClick={() => applyWindow(sg.startDate, sg.endDate)}
+                className="rounded border border-input bg-background px-2 py-1 font-medium hover:bg-accent"
+              >
+                {describeSuggestion(sg)}
+              </button>
+            ))}
+            {analysis.noWindowFound && (
+              <span className="text-muted-foreground">
+                No open window of this length found nearby inside its semester. Shorten the exam, or check the holiday and semester dates.
+              </span>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -443,6 +540,9 @@ export function SetupForm({ yearId, year, semesters, holidays, exams, studentRet
               existing={exams.find((e) => e.examTypeKey === key)}
               yearEc={year.yearEc}
               holidays={holidays}
+              semesters={semesters}
+              exams={exams}
+              year={year}
             />
           ))}
         </div>

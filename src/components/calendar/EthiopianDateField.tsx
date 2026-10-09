@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toEthiopian, fromEthiopian, ETHIOPIAN_MONTH_NAMES_EN } from '@/lib/calendar'
 import type { ISODate } from '@/lib/calendar'
 
@@ -27,6 +27,10 @@ interface Props {
    *  parent form track "has anything here actually changed" without
    *  needing this field's internal state to be controlled from outside. */
   onChange?: () => void
+  /** Fires with the resulting Gregorian date ('' while incomplete) each time
+   *  it changes after mount — lets a parent show live feedback while the
+   *  admin is still typing, before anything is saved. */
+  onValueChange?: (value: ISODate | '') => void
 }
 
 interface EcParts {
@@ -80,7 +84,7 @@ function daysInEthiopianMonth(ethiopianYear: number, month: number): number {
  * `new FormData(e.currentTarget).get(name)` call in SetupForm.tsx keeps
  * working completely unchanged.
  */
-export function EthiopianDateField({ label, name, ethiopianYear, defaultValue, onChange }: Props) {
+export function EthiopianDateField({ label, name, ethiopianYear, defaultValue, onChange, onValueChange }: Props) {
   const [parts, setParts] = useState<EcParts>(() => parseDefault(defaultValue))
 
   const maxDay = parts.month ? daysInEthiopianMonth(ethiopianYear, Number(parts.month)) : 30
@@ -97,6 +101,16 @@ export function EthiopianDateField({ label, name, ethiopianYear, defaultValue, o
       return ''
     }
   }, [parts, ethiopianYear])
+
+  const mounted = useRef(false)
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true
+      return
+    }
+    onValueChange?.(gregorian)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gregorian])
 
   function setMonth(month: string) {
     onChange?.()

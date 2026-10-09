@@ -5,7 +5,8 @@ import { AppError } from '../errors/AppError'
 import { can } from '../permissions/engine'
 import type { AuthContext } from '../auth/withAuth'
 import { isoDateSchema } from './validators'
-import { assertExamPlacementAllowed, indexHolidaysByDate, type ExamInstance, type ExamTypeKey } from '../calendar'
+import { analyzeExamWindow, indexHolidaysByDate, type ExamInstance, type ExamTypeKey } from '../calendar'
+import { rowToSemester } from './semester.service'
 import { assertFactNotGovernedByDependency } from './calendarDependency.service'
 
 function rowToInstance(row: Database['public']['Tables']['exam_instances']['Row']): ExamInstance {
@@ -74,9 +75,31 @@ export async function setExamInstance(
     })),
   )
 
-  // Throws a clean CALENDAR_EXAM_ON_WEEKEND / CALENDAR_EXAM_ON_CLOSING_HOLIDAY
-  // AppError immediately if either hard stop is violated.
-  assertExamPlacementAllowed({ startDate: startDate as never, endDate: endDate as never }, holidaysByDate)
+  // Rejects hard-stop violations (weekend, closing holiday, holiday week,
+  // start after end) with a clean AppError — and, instead of a bare "no",
+  // attaches the nearest clean windows so any client can offer them.
+  const [{ data: semesterRows }, { data: examRows }, { data: yearRow }] = await Promise.all([
+    supabase.from('semesters').select().eq('academic_year_id', academicYearId),
+    supabase.from('exam_instances').select().eq('academic_year_id', academicYearId),
+    supabase.from('academic_years').select().eq('id', academicYearId).single(),
+  ])
+  const analysis = analyzeExamWindow(
+    { examTypeKey, startDate: startDate as never, endDate: endDate as never },
+    {
+      holidaysByDate,
+      semesters: (semesterRows ?? []).map(rowToSemester),
+      academicYear: yearRow ? { startDate: yearRow.start_date as never, endDate: yearRow.end_date as never } : null,
+      otherExams: (examRows ?? []).filter((r) => r.exam_type_key !== examTypeKey).map(rowToInstance),
+    },
+  )
+  const firstProblem = analysis.problems[0]
+  if (firstProblem) {
+    throw new AppError(firstProblem.code, 422, firstProblem.message, {
+      allIssues: analysis.problems,
+      suggestions: analysis.suggestions,
+      swapped: analysis.swapped,
+    })
+  }
 
   const { data, error } = await supabase
     .from('exam_instances')

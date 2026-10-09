@@ -37,3 +37,11 @@ Teachers' return (Nehase 25), registration window, plasma starts, 6th/8th model 
 - **Holiday-week rule enforced:** new hard stop `CALENDAR_EXAM_IN_HOLIDAY_WEEK` (Mon-Fri week containing a school-closing holiday). A holiday on a Saturday/Sunday does not trigger it (assumption: confirm with the Ministry). Exam suggestions use the same rules, so an accepted suggestion always saves.
 - **Year-end day:** the last day of the academic year (Sene 30) is never a teaching day and never takes attendance (`reasons` contains `YEAR_END`; school stays open for staff). No database change needed.
 - **Sene 1-6 vocational choice:** intentionally not modelled.
+
+## Exam date helper (what an admin now sees)
+While typing an exam's start/end, the form checks the window live with the same function the server uses (`analyzeExamWindow`):
+- Explains each problem in Ethiopian dates (weekend, holiday, holiday week, end before start, outside semester/year, overlaps another exam).
+- Offers **Swap** when start is after end, and the nearest clean window **earlier** and **later**. Suggestions stay inside the exam's own semester, avoid other school-closing exams, and always pass every rule.
+- Says so when no clean window exists nearby, instead of showing nothing.
+- Save is disabled while a hard problem exists. The server also rejects it and returns the same suggestions in the error `details`, so any other client can use them.
+- Known limit: the database trigger (`fn_validate_exam_placement`) still only checks weekend and closing-holiday; the holiday-week rule is enforced in the app layer.
