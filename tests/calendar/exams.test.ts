@@ -205,3 +205,57 @@ describe('exams: checkExamOverlap (fix #16)', () => {
     ).toHaveLength(0)
   })
 })
+
+// --- UX improvement: suggestExamShift ---------------------------------
+import { suggestExamShift } from '@/lib/calendar/exams'
+import { ethiopianDate } from '@/lib/calendar/ethiopian-date'
+
+describe('suggestExamShift', () => {
+  it('finds the nearest clean window in both directions around a weekend-spanning window', () => {
+    // The real Ministry-stated S1 regional model window (Hidar 3-7, 2019
+    // E.C.), which lands on 2026-11-12 (Thu) -> 2026-11-16 (Mon) and spans
+    // a real Sat/Sun.
+    const instance = { startDate: ethiopianDate(2019, 3, 3), endDate: ethiopianDate(2019, 3, 7) }
+    const suggestions = suggestExamShift(instance, new Map())
+    expect(suggestions.length).toBe(2)
+    const earlier = suggestions.find((s) => s.direction === 'EARLIER')!
+    const later = suggestions.find((s) => s.direction === 'LATER')!
+    expect(earlier).toBeDefined()
+    expect(later).toBeDefined()
+    // Nearest clean 5-day window going later is 4 days later: 2026-11-16
+    // (Mon) -> 2026-11-20 (Fri).
+    expect(later.startDate).toBe('2026-11-16')
+    expect(later.endDate).toBe('2026-11-20')
+    expect(later.offsetDays).toBe(4)
+    // Nearest clean 5-day window going earlier is 3 days earlier:
+    // 2026-11-09 (Mon) -> 2026-11-13 (Fri).
+    expect(earlier.startDate).toBe('2026-11-09')
+    expect(earlier.endDate).toBe('2026-11-13')
+    expect(earlier.offsetDays).toBe(3)
+    // Sorted nearest-first (3 days < 4 days).
+    expect(suggestions[0]).toBe(earlier)
+  })
+
+  it('returns an empty array for a window that already clears both hard stops', () => {
+    const instance = { startDate: ethiopianDate(2019, 5, 17), endDate: ethiopianDate(2019, 5, 21) }
+    expect(suggestExamShift(instance, new Map())).toEqual([])
+  })
+
+  it('skips over a closing holiday that sits immediately next to the originally-invalid date', () => {
+    // 1-day exam placed directly ON a closing holiday; the very next day is
+    // ALSO a closing holiday, so the nearest clean "LATER" candidate must
+    // skip past both, not just the first.
+    const start = ethiopianDate(2019, 6, 1)
+    const nextDay = ethiopianDate(2019, 6, 2)
+    const holidaysByDate = new Map([
+      [start, [{ id: 'h1', academicYearId: 'y', holidayTypeKey: 'EID_FITR' as const, date: start, closesSchool: true, source: 'ADMIN_ENTERED' as const, confirmedByUserId: null, confirmedAt: null }]],
+      [nextDay, [{ id: 'h2', academicYearId: 'y', holidayTypeKey: 'EID_ADHA' as const, date: nextDay, closesSchool: true, source: 'ADMIN_ENTERED' as const, confirmedByUserId: null, confirmedAt: null }]],
+    ])
+    const suggestions = suggestExamShift({ startDate: start, endDate: start }, holidaysByDate)
+    const later = suggestions.find((s) => s.direction === 'LATER')!
+    expect(later).toBeDefined()
+    expect(later.startDate).not.toBe(start)
+    expect(later.startDate).not.toBe(nextDay)
+    expect(later.offsetDays).toBeGreaterThanOrEqual(2)
+  })
+})

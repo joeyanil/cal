@@ -9,7 +9,7 @@
  * surfaced as a conflict for a human to resolve, never auto-corrected.
  */
 import { AppError } from '../errors/AppError'
-import { eachDayInclusive, isWeekend, differenceInCalendarDays, isBefore, isSameOrBefore } from './date-utils'
+import { addDays, eachDayInclusive, isWeekend, differenceInCalendarDays, isBefore, isSameOrBefore } from './date-utils'
 import type { ISODate } from './date-utils'
 import type {
   ExamInstance,
@@ -168,6 +168,79 @@ export function checkExamCrossesSemesterBoundary(
       relatedRefs: [{ kind: 'SEMESTER_START', order: type.semesterOrder }],
     },
   ]
+}
+
+/**
+ * UX improvement — "shift suggestion" for a hard-stop violation (mission
+ * item 9's weekend/closing-holiday rejection still applies unchanged; this
+ * only adds a *suggestion* layer on top of it). Today an admin who enters
+ * a window that lands on a weekend or a closing holiday gets a rejection
+ * and has to manually count days back or forward in their head. This
+ * computes, in both directions, the nearest same-length window that clears
+ * every hard stop, so the UI can offer "move 2 days earlier" / "move 5 days
+ * later" as one-click choices instead of trial-and-error retyping.
+ *
+ * Never applied automatically — mirrors the engine's existing rule that
+ * Calendar "must not silently move... to resolve a conflict" (exams.ts
+ * checkExamCrossesSemesterBoundary comment, same principle applied here to
+ * hard stops instead of a WARNING-level conflict). This function only
+ * proposes; a human still clicks to accept.
+ */
+export interface ExamShiftSuggestion {
+  direction: 'EARLIER' | 'LATER'
+  offsetDays: number // always positive; magnitude of the shift
+  startDate: ISODate
+  endDate: ISODate
+}
+
+/**
+ * Searches outward from the originally-requested window, one day at a time
+ * in each direction, for the nearest window of the same length that is
+ * entirely free of weekends and closing holidays. Caps the search (default
+ * 60 days each way) so a pathological all-holidays stretch can't loop
+ * forever — if nothing is found within the cap, that direction is simply
+ * omitted rather than guessed at.
+ */
+export function suggestExamShift(
+  instance: Pick<ExamInstance, 'startDate' | 'endDate'>,
+  holidaysByDate: Map<ISODate, HolidayOccurrence[]>,
+  maxSearchDays = 60,
+): ExamShiftSuggestion[] {
+  const suggestions: ExamShiftSuggestion[] = []
+
+  function windowIsClean(start: ISODate, end: ISODate): boolean {
+    for (const date of eachDayInclusive(start, end)) {
+      if (isWeekend(date)) return false
+      const closingHoliday = (holidaysByDate.get(date) ?? []).some((h) => h.closesSchool)
+      if (closingHoliday) return false
+    }
+    return true
+  }
+
+  // No suggestion needed — the requested window already clears both hard
+  // stops, so there is nothing to shift.
+  if (windowIsClean(instance.startDate, instance.endDate)) return []
+
+  // direction: -1 = earlier, +1 = later
+  for (const dir of [-1, 1] as const) {
+    for (let offset = 1; offset <= maxSearchDays; offset++) {
+      const candidateStart = addDays(instance.startDate, dir * offset)
+      const candidateEnd = addDays(instance.endDate, dir * offset)
+      if (windowIsClean(candidateStart, candidateEnd)) {
+        suggestions.push({
+          direction: dir === -1 ? 'EARLIER' : 'LATER',
+          offsetDays: offset,
+          startDate: candidateStart,
+          endDate: candidateEnd,
+        })
+        break
+      }
+    }
+  }
+
+  // Nearest side first regardless of direction, so the UI's default/first
+  // suggestion is always "the smallest change that fixes it."
+  return suggestions.sort((a, b) => a.offsetDays - b.offsetDays)
 }
 
 export interface TimelineExamHit {

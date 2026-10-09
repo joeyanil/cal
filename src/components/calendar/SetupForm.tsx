@@ -5,7 +5,15 @@ import { useRouter } from 'next/navigation'
 import { Button } from '../ui/button'
 import { Panel } from '../ui/panel'
 import { EthiopianDateField } from './EthiopianDateField'
-import { MOVABLE_HOLIDAY_KEYS, STANDARD_EXAM_KEYS, GRADE12_EXAM_KEY } from '@/lib/calendar'
+import {
+  MOVABLE_HOLIDAY_KEYS,
+  STANDARD_EXAM_KEYS,
+  GRADE12_EXAM_KEY,
+  indexHolidaysByDate,
+  suggestExamShift,
+  formatEthiopian,
+  isoDate,
+} from '@/lib/calendar'
 import type {
   AcademicYear,
   Semester,
@@ -14,6 +22,7 @@ import type {
   HolidayTypeKey,
   ExamInstance,
   ExamTypeKey,
+  ExamShiftSuggestion,
   StudentReturnDay,
 } from '@/lib/calendar'
 
@@ -26,10 +35,21 @@ interface Props {
   studentReturn: StudentReturnDay | null
 }
 
+/** Error thrown by `post()` that preserves the server's AppError code, so
+ * callers (like ExamForm's weekend/holiday shift suggestion) can react to
+ * *which* validation failed, not just display its message. */
+class PostError extends Error {
+  code: string
+  constructor(message: string, code: string) {
+    super(message)
+    this.code = code
+  }
+}
+
 async function post(url: string, method: string, body: unknown) {
   const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const json = await res.json()
-  if (!json.success) throw new Error(json.error.message)
+  if (!json.success) throw new PostError(json.error.message, json.error.code)
   return json.data
 }
 
@@ -45,7 +65,7 @@ function useSectionSave() {
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [dirty, setDirty] = useState(false)
 
-  async function save(fn: () => Promise<unknown>) {
+  async function save(fn: () => Promise<unknown>, onError?: (err: unknown) => void) {
     setStatus('saving')
     try {
       await fn()
@@ -54,6 +74,7 @@ function useSectionSave() {
       router.refresh()
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Failed.')
+      onError?.(err)
     }
   }
 
@@ -237,29 +258,114 @@ function MovableHolidayForm({
   )
 }
 
-function ExamForm({ yearId, examKey, existing, yearEc }: { yearId: string; examKey: ExamTypeKey; existing?: ExamInstance; yearEc: number }) {
+/**
+ * Formats a shift suggestion as something an admin reads at a glance:
+ * direction, Ethiopian start/end, and how many days away. Nothing here
+ * needs i18n beyond what formatEthiopian already gives us.
+ */
+function describeSuggestion(s: ExamShiftSuggestion): string {
+  const dirLabel = s.direction === 'EARLIER' ? 'earlier' : 'later'
+  return `${s.offsetDays}d ${dirLabel} \u2192 ${formatEthiopian(s.startDate)} \u2013 ${formatEthiopian(s.endDate)}`
+}
+
+function ExamForm({
+  yearId,
+  examKey,
+  existing,
+  yearEc,
+  holidays,
+}: {
+  yearId: string
+  examKey: ExamTypeKey
+  existing?: ExamInstance
+  yearEc: number
+  holidays: HolidayOccurrence[]
+}) {
   const { status, dirty, setDirty, save } = useSectionSave()
+  // Holds the suggestions computed after a rejected save, and a remount
+  // key so applying one can reset the (uncontrolled) date fields to the
+  // suggested dates without hand-rolling controlled-input plumbing here.
+  const [suggestions, setSuggestions] = useState<ExamShiftSuggestion[]>([])
+  const [fieldValues, setFieldValues] = useState({ startDate: existing?.startDate ?? '', endDate: existing?.endDate ?? '' })
+  const [fieldsKey, setFieldsKey] = useState(0)
+
+  function handleSubmit(startDate: string, endDate: string) {
+    void save(
+      () =>
+        post(`/api/v1/academic-years/${yearId}/exams`, 'PUT', {
+          examTypeKey: examKey,
+          startDate,
+          endDate,
+        }),
+      (err) => {
+        const code = err instanceof Error && 'code' in err ? (err as { code: string }).code : undefined
+        if (code === 'CALENDAR_EXAM_ON_WEEKEND' || code === 'CALENDAR_EXAM_ON_CLOSING_HOLIDAY') {
+          setSuggestions(
+            suggestExamShift({ startDate: isoDate(startDate), endDate: isoDate(endDate) }, indexHolidaysByDate(holidays)),
+          )
+        } else {
+          setSuggestions([])
+        }
+      },
+    )
+  }
+
+  function applySuggestion(s: ExamShiftSuggestion) {
+    // Suggestions are offered, never applied automatically (same rule the
+    // engine already holds for every other auto-derived date, e.g.
+    // rollover.ts) — this only fills the fields in; the admin still has to
+    // review and press Save.
+    setFieldValues({ startDate: s.startDate, endDate: s.endDate })
+    setSuggestions([])
+    setDirty(true)
+    setFieldsKey((k) => k + 1)
+  }
 
   return (
-    <form
-      className="flex flex-wrap items-end gap-3"
-      onSubmit={(e) => {
-        e.preventDefault()
-        const form = new FormData(e.currentTarget)
-        void save(() =>
-          post(`/api/v1/academic-years/${yearId}/exams`, 'PUT', {
-            examTypeKey: examKey,
-            startDate: form.get('startDate'),
-            endDate: form.get('endDate'),
-          }),
-        )
-      }}
-    >
-      <span className="w-40 text-sm">{examKey}</span>
-      <EthiopianDateField label="Start" name="startDate" ethiopianYear={yearEc} defaultValue={existing?.startDate ?? ''} onChange={() => setDirty(true)} />
-      <EthiopianDateField label="End" name="endDate" ethiopianYear={yearEc} defaultValue={existing?.endDate ?? ''} onChange={() => setDirty(true)} />
-      <SaveButton status={status} dirty={dirty} />
-    </form>
+    <div className="flex flex-col gap-1.5">
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          const form = new FormData(e.currentTarget)
+          handleSubmit(String(form.get('startDate') ?? ''), String(form.get('endDate') ?? ''))
+        }}
+      >
+        <span className="w-40 text-sm">{examKey}</span>
+        <EthiopianDateField
+          key={`start-${fieldsKey}`}
+          label="Start"
+          name="startDate"
+          ethiopianYear={yearEc}
+          defaultValue={fieldValues.startDate}
+          onChange={() => setDirty(true)}
+        />
+        <EthiopianDateField
+          key={`end-${fieldsKey}`}
+          label="End"
+          name="endDate"
+          ethiopianYear={yearEc}
+          defaultValue={fieldValues.endDate}
+          onChange={() => setDirty(true)}
+        />
+        <SaveButton status={status} dirty={dirty} />
+      </form>
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 pl-[calc(10rem+0.75rem)] text-xs">
+          <span className="text-muted-foreground">That window hits a weekend or closing holiday. Nearest open window:</span>
+          {suggestions.map((s) => (
+            <button
+              key={s.direction}
+              type="button"
+              onClick={() => applySuggestion(s)}
+              className="rounded border border-input bg-background px-2 py-1 font-medium hover:bg-accent"
+            >
+              {describeSuggestion(s)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -330,7 +436,14 @@ export function SetupForm({ yearId, year, semesters, holidays, exams, studentRet
       <Panel title="4. Exams">
         <div className="space-y-2">
           {[...STANDARD_EXAM_KEYS, GRADE12_EXAM_KEY].map((key) => (
-            <ExamForm key={key} yearId={yearId} examKey={key} existing={exams.find((e) => e.examTypeKey === key)} yearEc={year.yearEc} />
+            <ExamForm
+              key={key}
+              yearId={yearId}
+              examKey={key}
+              existing={exams.find((e) => e.examTypeKey === key)}
+              yearEc={year.yearEc}
+              holidays={holidays}
+            />
           ))}
         </div>
       </Panel>
