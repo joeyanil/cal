@@ -31,3 +31,9 @@ Teachers' return (Nehase 25), registration window, plasma starts, 6th/8th model 
 
 ## Implemented here
 `suggestExamShift()` in `src/lib/calendar/exams.ts`, wired into `ExamForm`: after a weekend/closing-holiday rejection it offers the nearest clean window earlier and later as one-click chips. Chips fill the fields only; the admin still presses Save.
+
+## Decisions applied (follow-up)
+- **Day count:** `teachingDayBreakdown` now also returns `ministryBasisDays` = teaching days + exam days + student-return day. Those days stay non-learning with no attendance; they are counted only so K2 can be compared with the Ministry's 210.
+- **Holiday-week rule enforced:** new hard stop `CALENDAR_EXAM_IN_HOLIDAY_WEEK` (Mon-Fri week containing a school-closing holiday). A holiday on a Saturday/Sunday does not trigger it (assumption: confirm with the Ministry). Exam suggestions use the same rules, so an accepted suggestion always saves.
+- **Year-end day:** the last day of the academic year (Sene 30) is never a teaching day and never takes attendance (`reasons` contains `YEAR_END`; school stays open for staff). No database change needed.
+- **Sene 1-6 vocational choice:** intentionally not modelled.

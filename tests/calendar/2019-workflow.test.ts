@@ -302,7 +302,8 @@ describe('2019 E.C. -- real Ministry plan, Part 2: full setup with every Ministr
       breakdown.holidayLostDays +
       breakdown.examLostDays +
       breakdown.breakLostDays +
-      breakdown.studentReturnLostDays
+      breakdown.studentReturnLostDays +
+      breakdown.yearEndLostDays
     expect(sum).toBe(breakdown.totalCalendarDays)
     expect(breakdown.studentReturnLostDays).toBe(1)
   })

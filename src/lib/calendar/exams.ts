@@ -122,7 +122,35 @@ export function checkExamHardStops(
       })
     }
   }
+
+  // Ministry rule: no exam in a week (Mon-Fri) that contains a school-closing
+  // holiday. The holiday day itself is already reported above, so this only
+  // reports the OTHER exam days sharing that week. One issue per week.
+  const reportedWeeks = new Set<ISODate>()
+  for (const date of eachDayInclusive(instance.startDate, instance.endDate)) {
+    if (isWeekend(date)) continue
+    const monday = addDays(date, -((new Date(date + 'T00:00:00Z').getUTCDay() + 6) % 7))
+    if (reportedWeeks.has(monday)) continue
+    for (let i = 0; i < 5; i++) {
+      const day = addDays(monday, i)
+      const holiday = (holidaysByDate.get(day) ?? []).find((h) => h.closesSchool)
+      if (holiday && day !== date && !isHolidayInWindow(day, instance)) {
+        reportedWeeks.add(monday)
+        issues.push({
+          severity: 'ERROR',
+          code: 'CALENDAR_EXAM_IN_HOLIDAY_WEEK',
+          message: `Exam week of ${monday} contains a school-closing holiday on ${day}. No exams are allowed in a holiday week.`,
+          ref: { kind: 'HOLIDAY_OCCURRENCE', holidayTypeKey: holiday.holidayTypeKey },
+        })
+        break
+      }
+    }
+  }
   return issues
+}
+
+function isHolidayInWindow(day: ISODate, w: { startDate: ISODate; endDate: ISODate }): boolean {
+  return isSameOrBefore(w.startDate, day) && isSameOrBefore(day, w.endDate)
 }
 
 /** Throws on the first hard-stop violation. Services call this at
@@ -208,13 +236,10 @@ export function suggestExamShift(
 ): ExamShiftSuggestion[] {
   const suggestions: ExamShiftSuggestion[] = []
 
+  // Same rules the save enforces (weekend, closing holiday, holiday week),
+  // so a suggestion is never rejected when the admin accepts it.
   function windowIsClean(start: ISODate, end: ISODate): boolean {
-    for (const date of eachDayInclusive(start, end)) {
-      if (isWeekend(date)) return false
-      const closingHoliday = (holidaysByDate.get(date) ?? []).some((h) => h.closesSchool)
-      if (closingHoliday) return false
-    }
-    return true
+    return checkExamHardStops({ startDate: start, endDate: end }, holidaysByDate).length === 0
   }
 
   // No suggestion needed — the requested window already clears both hard

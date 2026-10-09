@@ -259,3 +259,33 @@ describe('suggestExamShift', () => {
     expect(later.offsetDays).toBeGreaterThanOrEqual(2)
   })
 })
+
+// --- Holiday-week rule (Ministry: no exams in a week containing a holiday) ---
+describe('holiday-week rule', () => {
+  const holiday = (d: string) => ({
+    id: 'h', academicYearId: 'y', holidayTypeKey: 'TIMKAT' as const, date: d as never,
+    closesSchool: true, source: 'ADMIN_ENTERED' as const, confirmedByUserId: null, confirmedAt: null,
+  })
+
+  it('rejects an exam on Thursday when the holiday is that same week on Tuesday', () => {
+    const tue = '2027-01-19' // Timkat 2019 E.C., Tuesday
+    const map = new Map([[tue as never, [holiday(tue)]]])
+    const issues = checkExamHardStops({ startDate: '2027-01-21' as never, endDate: '2027-01-21' as never }, map as never)
+    expect(issues.map((i) => i.code)).toEqual(['CALENDAR_EXAM_IN_HOLIDAY_WEEK'])
+  })
+
+  it('allows the same exam the following week', () => {
+    const tue = '2027-01-19'
+    const map = new Map([[tue as never, [holiday(tue)]]])
+    expect(checkExamHardStops({ startDate: '2027-01-25' as never, endDate: '2027-01-29' as never }, map as never)).toEqual([])
+  })
+
+  it('suggestions skip holiday weeks, so an accepted suggestion always saves', () => {
+    const tue = '2027-01-19'
+    const map = new Map([[tue as never, [holiday(tue)]]])
+    const bad = { startDate: '2027-01-21' as never, endDate: '2027-01-22' as never }
+    for (const s of suggestExamShift(bad, map as never)) {
+      expect(checkExamHardStops(s, map as never)).toEqual([])
+    }
+  })
+})

@@ -299,7 +299,7 @@ function ExamForm({
         }),
       (err) => {
         const code = err instanceof Error && 'code' in err ? (err as { code: string }).code : undefined
-        if (code === 'CALENDAR_EXAM_ON_WEEKEND' || code === 'CALENDAR_EXAM_ON_CLOSING_HOLIDAY') {
+        if (code === 'CALENDAR_EXAM_ON_WEEKEND' || code === 'CALENDAR_EXAM_ON_CLOSING_HOLIDAY' || code === 'CALENDAR_EXAM_IN_HOLIDAY_WEEK') {
           setSuggestions(
             suggestExamShift({ startDate: isoDate(startDate), endDate: isoDate(endDate) }, indexHolidaysByDate(holidays)),
           )
@@ -352,7 +352,7 @@ function ExamForm({
       </form>
       {suggestions.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 pl-[calc(10rem+0.75rem)] text-xs">
-          <span className="text-muted-foreground">That window hits a weekend or closing holiday. Nearest open window:</span>
+          <span className="text-muted-foreground">That window hits a weekend, a holiday, or a holiday week. Nearest open window:</span>
           {suggestions.map((s) => (
             <button
               key={s.direction}

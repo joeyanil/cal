@@ -51,7 +51,13 @@ export interface TeachingDayBreakdown {
   examLostDays: number
   breakLostDays: number
   studentReturnLostDays: number
+  /** Last day of the year: no lessons, no attendance. */
+  yearEndLostDays: number
   teachingDays: number
+  /** Ministry-style count: teaching days PLUS exam days and the student-return
+   *  day. Those days are still non-learning days with no attendance; they are
+   *  counted here only so K2's total can be compared with the Ministry's 210. */
+  ministryBasisDays: number
 }
 
 /**
@@ -71,7 +77,9 @@ export function teachingDayBreakdown(entries: DailyTimelineEntry[]): TeachingDay
     examLostDays: 0,
     breakLostDays: 0,
     studentReturnLostDays: 0,
+    yearEndLostDays: 0,
     teachingDays: 0,
+    ministryBasisDays: 0,
   }
 
   for (const entry of entries) {
@@ -87,6 +95,8 @@ export function teachingDayBreakdown(entries: DailyTimelineEntry[]): TeachingDay
       breakdown.holidayLostDays++
     } else if (entry.isSemesterBreak) {
       breakdown.breakLostDays++
+    } else if (entry.reasons.includes('YEAR_END')) {
+      breakdown.yearEndLostDays++
     } else if (entry.isStudentReturn) {
       breakdown.studentReturnLostDays++
     } else if (entry.exams.some((e) => e.closesSchool)) {
@@ -99,5 +109,7 @@ export function teachingDayBreakdown(entries: DailyTimelineEntry[]): TeachingDay
     // function doesn't yet know about; that gap is visible, not hidden.
   }
 
+  breakdown.ministryBasisDays =
+    breakdown.teachingDays + breakdown.examLostDays + breakdown.studentReturnLostDays
   return breakdown
 }
