@@ -45,3 +45,18 @@ While typing an exam's start/end, the form checks the window live with the same 
 - Says so when no clean window exists nearby, instead of showing nothing.
 - Save is disabled while a hard problem exists. The server also rejects it and returns the same suggestions in the error `details`, so any other client can use them.
 - Known limit: the database trigger (`fn_validate_exam_placement`) still only checks weekend and closing-holiday; the holiday-week rule is enforced in the app layer.
+
+## Guided setup (replaces the old single page of Save buttons)
+`/calendar/[yearId]/setup` is now a six-step flow, in the order things depend on each other: **School year, Semesters, Holidays, Exams, Student return, Review**.
+- One **Continue** per step saves only what changed; there are no per-row Save buttons. Back never loses typing.
+- Year and semesters must be filled in first (exams and breaks are checked against them). Later steps can be left incomplete and finished later.
+- The page opens on the first step that still needs something; a year still on the default boundary opens on step 1.
+- The same rules the server enforces run live while typing; errors block Continue, and exam fixes (swap, earlier, later) are one click.
+- Review shows every date in Ethiopian form, the learning-day count and the Ministry-basis count, and lists what must be fixed, what is still to enter, and what is worth a look, each with a jump link. Finishing builds and publishes the timeline.
+- **Permanent holidays need no clicks.** They are added to every year automatically (on creation, on opening setup, before validation and before every timeline build), marked confirmed, and always counted. The old "Propose" and "Confirm" buttons are gone (the API endpoints remain).
+- Validation messages everywhere now show Ethiopian dates and holiday/exam names instead of ISO dates and internal keys.
+- Exam rule violations are now attached to their exam, so a holiday entered later that lands in an exam week shows as an error on that exam.
+
+## Deploying this change (Cloudflare + Supabase)
+1. Run `supabase/migrations/0020_calendar_exam_holiday_week.sql` in the Supabase SQL Editor (adds the holiday-week rule to the database check; safe to run twice).
+2. Deploy the branch (a Cloudflare preview if branch builds are enabled, otherwise merge to main).

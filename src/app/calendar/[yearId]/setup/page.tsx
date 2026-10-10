@@ -3,10 +3,10 @@ import { withAuth } from '@/lib/auth/withAuth'
 import { createServerClient } from '@/lib/supabase/server'
 import { getAcademicYear, listAcademicYears } from '@/lib/services/academicYear.service'
 import { listSemesters } from '@/lib/services/semester.service'
-import { listHolidayOccurrences } from '@/lib/services/holiday.service'
+import { ensureFixedHolidays, listHolidayOccurrences } from '@/lib/services/holiday.service'
 import { listExamInstances } from '@/lib/services/exam.service'
 import { getStudentReturn } from '@/lib/services/studentReturn.service'
-import { SetupForm } from '@/components/calendar/SetupForm'
+import { SetupWizard } from '@/components/calendar/SetupWizard'
 import { YearSwitcher } from '@/components/calendar/YearSwitcher'
 import { ErrorState } from '@/components/calendar/ErrorState'
 export const dynamic = 'force-dynamic'
@@ -20,6 +20,9 @@ export default async function SetupPage({ params }: Props) {
   try {
     const ctx = await withAuth()
     const supabase = await createServerClient()
+    // Permanent holidays count from the moment the year exists — no admin step.
+    const yearForSeed = await getAcademicYear(supabase, ctx, yearId)
+    await ensureFixedHolidays(supabase, yearId, yearForSeed.yearEc, ctx.user.id)
     const [year, years, semesters, holidays, exams, studentReturn] = await Promise.all([
       getAcademicYear(supabase, ctx, yearId),
       listAcademicYears(supabase, ctx),
@@ -30,7 +33,7 @@ export default async function SetupPage({ params }: Props) {
     ])
 
     return (
-      <div className="mx-auto max-w-3xl space-y-4">
+      <div className="mx-auto max-w-3xl space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Set up {year.name}</h1>
@@ -40,7 +43,7 @@ export default async function SetupPage({ params }: Props) {
           </div>
           {years.length > 1 && <YearSwitcher years={years} currentYearId={yearId} />}
         </div>
-        <SetupForm
+        <SetupWizard
           yearId={yearId}
           year={year}
           semesters={semesters}

@@ -4,7 +4,7 @@ This is for running the Calendar Engine as its own, independent product —
 its own Supabase project, its own Vercel deployment, usable end to end — for
 example to demo or pilot it before the real K2 platform exists to merge it
 into. If you're deploying into an existing K2 environment instead, skip this
-whole document: apply the 18 migrations in `supabase/migrations/` against
+whole document: apply the calendar migrations (0001–0020) in `supabase/migrations/` against
 K2's real database and you're done, exactly as `README.md` describes.
 
 ## Why this needs one extra migration
@@ -50,6 +50,7 @@ for exactly what to do with it once a real K2 exists to merge into.
    supabase/migrations/0017_calendar_dependency_integrity.sql
    supabase/migrations/0018_calendar_timeline_multi_fact.sql
    supabase/migrations/0019_calendar_closed_year_insert_protection.sql
+   supabase/migrations/0020_calendar_exam_holiday_week.sql
    ```
 
    (If your Supabase project's CLI/migration tooling wants everything in

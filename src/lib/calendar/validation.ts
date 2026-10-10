@@ -175,7 +175,15 @@ export function validateCalendarConfiguration(input: ValidationInput): Validatio
 
   // --- ERROR: exam hard stops + boundary; WARNING: semester crossing ----------
   for (const instance of examInstances) {
-    issues.push(...checkExamHardStops(instance, holidaysByDate))
+    // Tag each hard stop with the exam it belongs to (keeping any holiday it
+    // mentions as a related fact), so screens can show it next to that exam.
+    for (const issue of checkExamHardStops(instance, holidaysByDate)) {
+      issues.push({
+        ...issue,
+        ref: { kind: 'EXAM_START', examTypeKey: instance.examTypeKey },
+        relatedRefs: issue.ref ? [issue.ref] : undefined,
+      })
+    }
     issues.push(...checkExamCrossesSemesterBoundary(instance, semesters))
     if (isAfter(academicYear.startDate, instance.startDate) || isAfter(instance.endDate, academicYear.endDate)) {
       issues.push({

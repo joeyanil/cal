@@ -67,6 +67,10 @@ export const CALENDAR_ERROR_CODES = {
     httpStatus: 422,
     meaning: 'Exam window includes a date on which a holiday closes the school. Hard stop.',
   },
+  CALENDAR_EXAM_IN_HOLIDAY_WEEK: {
+    httpStatus: 422,
+    meaning: 'Exam window is in a Monday-Friday week that contains a school-closing holiday. Ministry rule: no exams in a holiday week. Hard stop.',
+  },
   CALENDAR_EXAM_INVALID_RANGE: {
     httpStatus: 422,
     meaning: 'Exam end date is before its start date.',

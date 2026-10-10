@@ -1,5 +1,6 @@
 import { Panel } from '../ui/panel'
 import { SeverityBadge } from '../ui/badge'
+import { localizeMessage } from '@/lib/calendar'
 import type { ValidationIssue, ValidationSeverity } from '@/lib/calendar'
 
 const SEVERITY_ORDER: ValidationSeverity[] = ['ERROR', 'MISSING', 'WARNING', 'INFORMATION']
@@ -37,7 +38,7 @@ export function ValidationPanel({ issues }: { issues: ValidationIssue[] }) {
               <ul className="space-y-1.5 border-l-2 border-border pl-3">
                 {group.map((issue, i) => (
                   <li key={`${issue.code}-${i}`} className="text-sm text-foreground">
-                    {issue.message}
+                    {localizeMessage(issue.message)}
                   </li>
                 ))}
               </ul>

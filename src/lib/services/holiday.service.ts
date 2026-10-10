@@ -63,6 +63,9 @@ export async function seedFixedHolidays(
         date: p.date,
         closes_school: p.closesSchool,
         source: p.source,
+        // Permanent holidays need no admin sign-off: they count from the start.
+        confirmed_at: new Date().toISOString(),
+        confirmed_by: ctx.user.id,
       })),
       { onConflict: 'academic_year_id,holiday_type_key', ignoreDuplicates: true },
     )
@@ -70,6 +73,45 @@ export async function seedFixedHolidays(
 
   if (error) throw new AppError('CALENDAR_CREATE_FAILED', 500, error.message)
   return (data ?? []).map(rowToOccurrence)
+}
+
+/**
+ * Makes sure the five permanent holidays are part of the year, with no admin
+ * action. Safe to call on every page load and before every calculation: it
+ * only inserts what is missing, marks them confirmed (a permanent date needs
+ * no sign-off), and never throws — if the caller lacks permission or the
+ * year is closed, the calculation simply uses what is already there.
+ */
+export async function ensureFixedHolidays(
+  supabase: SupabaseClient<Database>,
+  academicYearId: string,
+  yearEc: number,
+  userId: string | null,
+): Promise<void> {
+  try {
+    const now = new Date().toISOString()
+    await supabase.from('holiday_occurrences').upsert(
+      proposeFixedHolidayOccurrences(academicYearId, yearEc).map((p) => ({
+        academic_year_id: p.academicYearId,
+        holiday_type_key: p.holidayTypeKey,
+        date: p.date,
+        closes_school: p.closesSchool,
+        source: p.source,
+        confirmed_at: now,
+        confirmed_by: userId,
+      })),
+      { onConflict: 'academic_year_id,holiday_type_key', ignoreDuplicates: true },
+    )
+    // Older rows that were proposed but never clicked "Confirm".
+    await supabase
+      .from('holiday_occurrences')
+      .update({ confirmed_at: now, confirmed_by: userId })
+      .eq('academic_year_id', academicYearId)
+      .eq('source', 'AUTO_PROPOSED')
+      .is('confirmed_at', null)
+  } catch {
+    // Best effort by design.
+  }
 }
 
 export const confirmFixedHolidaySchema = z.object({

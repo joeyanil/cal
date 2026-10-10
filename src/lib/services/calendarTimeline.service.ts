@@ -1,3 +1,4 @@
+import { ensureFixedHolidays } from './holiday.service'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import type { Database } from '@/types/database.types'
@@ -179,6 +180,11 @@ export async function buildCandidateTimeline(
   academicYearId: string,
 ): Promise<{ buildId: string; entryCount: number }> {
   if (!can(ctx, 'calendar.build_timeline')) throw new AppError('FORBIDDEN', 403)
+
+  {
+    const { data: yearRow } = await supabase.from('academic_years').select('year_ec').eq('id', academicYearId).single()
+    if (yearRow) await ensureFixedHolidays(supabase, academicYearId, yearRow.year_ec, ctx.user.id)
+  }
 
   const { config: rawConfig, configRevision, dependencyRules } = await loadConfiguration(supabase, academicYearId)
   // The real pipeline step fix #8 was missing entirely: a DEPENDENT fact's

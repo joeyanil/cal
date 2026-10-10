@@ -112,6 +112,7 @@ export async function setExamInstance(
 
   if (error) {
     if (error.hint === 'CALENDAR_EXAM_ON_WEEKEND') throw new AppError('CALENDAR_EXAM_ON_WEEKEND', 422, error.message)
+    if (error.hint === 'CALENDAR_EXAM_IN_HOLIDAY_WEEK') throw new AppError('CALENDAR_EXAM_IN_HOLIDAY_WEEK', 422, error.message)
     if (error.hint === 'CALENDAR_EXAM_ON_CLOSING_HOLIDAY') {
       throw new AppError('CALENDAR_EXAM_ON_CLOSING_HOLIDAY', 422, error.message)
     }
