@@ -3,7 +3,6 @@ import { withAuth } from '@/lib/auth/withAuth'
 import { createServerClient } from '@/lib/supabase/server'
 import { getAcademicYear } from '@/lib/services/academicYear.service'
 import { getCurrentTimeline } from '@/lib/services/calendarTimeline.service'
-import { getTeachingDaySummary } from '@/lib/services/calendarTimeline.service'
 import { YearView } from '@/components/calendar/YearView'
 import { ErrorState } from '@/components/calendar/ErrorState'
 import { Panel } from '@/components/ui/panel'
@@ -20,7 +19,6 @@ export default async function YearViewPage({ params }: Props) {
     const supabase = await createServerClient()
     const year = await getAcademicYear(supabase, ctx, yearId)
     const entries = await getCurrentTimeline(supabase, ctx, yearId)
-    const summary = await getTeachingDaySummary(supabase, ctx, yearId, year.startDate, year.endDate)
 
     return (
       <div className="space-y-6">
@@ -31,16 +29,6 @@ export default async function YearViewPage({ params }: Props) {
               ← Back to year overview
             </Link>
           </div>
-          <dl className="flex gap-6 text-right text-sm">
-            <div>
-              <dt className="text-xs text-muted-foreground">Teaching days</dt>
-              <dd className="tabular-dates text-lg text-foreground">{summary.teachingDays}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Calendar days</dt>
-              <dd className="tabular-dates text-lg text-foreground">{summary.breakdown.totalCalendarDays}</dd>
-            </div>
-          </dl>
         </div>
         <YearView entries={entries} />
       </div>
