@@ -3,6 +3,7 @@ import type { Database } from '@/types/database.types'
 import { AppError } from '../errors/AppError'
 import { can } from '../permissions/engine'
 import type { AuthContext } from '../auth/withAuth'
+import { ensureFixedHolidays } from './holiday.service'
 import { validateCalendarConfiguration, summarizeValidation, type ISODate, type ValidationIssue } from '../calendar'
 
 export async function runCalendarValidation(
@@ -11,6 +12,11 @@ export async function runCalendarValidation(
   academicYearId: string,
 ): Promise<ValidationIssue[]> {
   if (!can(ctx, 'calendar.view')) throw new AppError('FORBIDDEN', 403)
+
+  {
+    const { data: yearRow } = await supabase.from('academic_years').select('year_ec').eq('id', academicYearId).single()
+    if (yearRow) await ensureFixedHolidays(supabase, academicYearId, yearRow.year_ec, ctx.user.id)
+  }
 
   const [{ data: year, error: yearError }, { data: semesters }, { data: holidays }, { data: exams }, { data: studentReturn }, { data: deps }] =
     await Promise.all([

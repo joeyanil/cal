@@ -9,6 +9,7 @@ import { ethiopianDate, type AcademicYear, type Semester } from '../calendar'
 import { validateCalendarConfiguration } from '../calendar/validation'
 import { loadConfiguration } from './calendarTimeline.service'
 import { rowToSemester } from './semester.service'
+import { ensureFixedHolidays } from './holiday.service'
 
 export const createAcademicYearSchema = z.object({
   yearEc: z.number().int().min(1900).max(2500),
@@ -66,7 +67,11 @@ export async function createAcademicYear(
     .single()
 
   if (error) {
-    if (error.code === '23505') throw new AppError('CALENDAR_YEAR_ALREADY_EXISTS', 409, error.message)
+    if (error.code === '23505') {
+      // Point at the year that is already there so the screen can open it.
+      const { data: existing } = await supabase.from('academic_years').select('id').eq('year_ec', yearEc).maybeSingle()
+      throw new AppError('CALENDAR_YEAR_ALREADY_EXISTS', 409, `${yearEc} E.C. already exists.`, { existingYearId: existing?.id ?? null })
+    }
     throw new AppError('CALENDAR_CREATE_FAILED', 500, error.message)
   }
 
@@ -81,6 +86,7 @@ export async function createAcademicYear(
     // really there, exactly the class of gap this fix exists to close.
     throw new AppError('CALENDAR_CREATE_FAILED', 500, 'Year was created but its semesters could not be confirmed.')
   }
+  await ensureFixedHolidays(supabase, data.id, yearEc, ctx.user.id)
 
   return { ...rowToAcademicYear(data), semesters: semesterRows.map(rowToSemester) }
 }

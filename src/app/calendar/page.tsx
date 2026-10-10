@@ -39,6 +39,9 @@ export default async function CalendarDashboardPage() {
                     {year.name}
                   </Link>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <Link href={`/calendar/${year.id}/setup`} className="font-medium text-primary underline underline-offset-4">
+                      Set up →
+                    </Link>
                     <span className="tabular-dates">
                       {formatEthiopian(year.startDate)} – {formatEthiopian(year.endDate)}
                     </span>

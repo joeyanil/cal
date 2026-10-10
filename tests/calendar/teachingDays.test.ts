@@ -51,7 +51,8 @@ describe('teachingDays: works identically across whole-year / semester / month /
       breakdown.holidayLostDays +
       breakdown.examLostDays +
       breakdown.breakLostDays +
-      breakdown.studentReturnLostDays
+      breakdown.studentReturnLostDays +
+      breakdown.yearEndLostDays
     expect(sum).toBe(breakdown.totalCalendarDays)
   })
 })
@@ -124,5 +125,23 @@ describe('teachingDays: Student Return exclusion', () => {
     const breakdown = teachingDayBreakdown(day)
     expect(breakdown.studentReturnLostDays).toBe(1)
     expect(breakdown.totalCalendarDays).toBe(1)
+  })
+})
+
+describe('year-end day and Ministry-basis count', () => {
+  it('last day of the year has no attendance and is not a teaching day', () => {
+    const entries = buildFullYearTimeline(config())
+    const last = entries[entries.length - 1]!
+    if (!last.isWeekend) {
+      expect(last.teachingDay).toBe(false)
+      expect(last.attendanceAvailable).toBe(false)
+      expect(last.schoolOpen).toBe(true)
+      expect(last.reasons).toContain('YEAR_END')
+    }
+  })
+
+  it('Ministry-basis count = teaching days + exam days + student-return day', () => {
+    const b = teachingDayBreakdown(buildFullYearTimeline(config()))
+    expect(b.ministryBasisDays).toBe(b.teachingDays + b.examLostDays + b.studentReturnLostDays)
   })
 })

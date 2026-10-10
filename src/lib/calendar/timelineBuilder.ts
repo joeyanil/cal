@@ -55,6 +55,9 @@ interface DescribeDateContext {
   examsByDate: Map<ISODate, TimelineExamHit[]>
   studentReturnDate: ISODate | null
   semesterBreak: SemesterBreak | null
+  /** Last day of the academic year (e.g. Sene 30). Attendance is never taken
+   *  on it: school is open, but it is not a teaching day. */
+  yearEndDate?: ISODate | null
 }
 
 function semesterOrderForDate(date: ISODate, semesters: Semester[]): 1 | 2 | null {
@@ -134,6 +137,12 @@ export function describeDate(date: ISODate, ctx: DescribeDateContext): DailyTime
     schoolOpen = false
     teachingDay = false
     attendanceAvailable = false
+  }
+  if (!weekend && ctx.yearEndDate === date) {
+    reasons.push('YEAR_END')
+    teachingDay = false
+    attendanceAvailable = false
+    // schoolOpen untouched: staff are in, results are announced, but no lessons.
   }
   if (isStudentReturn) {
     reasons.push('STUDENT_RETURN')
@@ -262,6 +271,7 @@ export function buildFullYearTimeline(config: CalendarConfiguration): DailyTimel
     examsByDate: indexExamsByDate(examInstances),
     studentReturnDate: studentReturn?.date ?? null,
     semesterBreak: deriveSemesterBreak(semesters),
+    yearEndDate: academicYear.endDate,
   }
 
   const entries: DailyTimelineEntry[] = []
