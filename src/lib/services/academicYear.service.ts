@@ -67,7 +67,11 @@ export async function createAcademicYear(
     .single()
 
   if (error) {
-    if (error.code === '23505') throw new AppError('CALENDAR_YEAR_ALREADY_EXISTS', 409, error.message)
+    if (error.code === '23505') {
+      // Point at the year that is already there so the screen can open it.
+      const { data: existing } = await supabase.from('academic_years').select('id').eq('year_ec', yearEc).maybeSingle()
+      throw new AppError('CALENDAR_YEAR_ALREADY_EXISTS', 409, `${yearEc} E.C. already exists.`, { existingYearId: existing?.id ?? null })
+    }
     throw new AppError('CALENDAR_CREATE_FAILED', 500, error.message)
   }
 

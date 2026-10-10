@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '../ui/button'
 
@@ -9,11 +10,13 @@ export function CreateYearForm() {
   const [yearEc, setYearEc] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [existingId, setExistingId] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setBusy(true)
     setError(null)
+    setExistingId(null)
     try {
       const res = await fetch('/api/v1/academic-years', {
         method: 'POST',
@@ -21,7 +24,10 @@ export function CreateYearForm() {
         body: JSON.stringify({ yearEc: Number(yearEc) }),
       })
       const body = await res.json()
-      if (!body.success) throw new Error(body.error.message)
+      if (!body.success) {
+        setExistingId(body.error.details?.existingYearId ?? null)
+        throw new Error(body.error.message)
+      }
       router.push(`/calendar/${body.data.id}`)
       router.refresh()
     } catch (err) {
@@ -47,7 +53,16 @@ export function CreateYearForm() {
       <Button type="submit" loading={busy} loadingText="Creating…">
         Create year
       </Button>
-      {error && <span className="text-xs text-error-text">{error}</span>}
+      {error && (
+        <span className="text-xs text-error-text">
+          {error}{' '}
+          {existingId && (
+            <Link href={`/calendar/${existingId}/setup`} className="font-medium text-primary underline underline-offset-4">
+              Open it and continue setup →
+            </Link>
+          )}
+        </span>
+      )}
     </form>
   )
 }
