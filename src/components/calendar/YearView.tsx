@@ -19,6 +19,7 @@ function dayClasses(entry: DailyTimelineEntry): string {
   if (entry.holidayClosure) return 'bg-warning text-warning-foreground'
   if (entry.isSemesterBreak) return 'bg-muted text-muted-foreground'
   if (entry.isStudentReturn) return 'bg-primary/20 text-foreground ring-1 ring-inset ring-primary'
+  if (entry.reasons.includes('YEAR_END')) return 'bg-transparent text-foreground ring-1 ring-inset ring-muted-foreground/60'
   if (entry.exams.length > 0) return 'bg-primary/15 text-foreground' // Grade 12 exam, non-closing
   if (entry.isWeekend) return 'bg-transparent text-muted-foreground/50'
   return 'bg-transparent text-foreground'
@@ -30,7 +31,8 @@ function dayTitle(entry: DailyTimelineEntry): string {
   for (const e of entry.exams) parts.push(`${e.name} — day ${e.dayNumber} of ${e.totalDays}`)
   if (entry.isStudentReturn) parts.push('Student Return / Orientation')
   if (entry.isSemesterBreak) parts.push('Semester break')
-  if (!entry.teachingDay && entry.holidays.length === 0 && entry.exams.length === 0 && !entry.isSemesterBreak && !entry.isStudentReturn && !entry.isWeekend) {
+  if (entry.reasons.includes('YEAR_END')) parts.push('Last day of the school year — no attendance')
+  if (!entry.teachingDay && entry.holidays.length === 0 && entry.exams.length === 0 && !entry.isSemesterBreak && !entry.isStudentReturn && !entry.isWeekend && !entry.reasons.includes('YEAR_END')) {
     parts.push('Non-teaching')
   }
   return parts.join(' — ')
@@ -76,6 +78,7 @@ export function YearView({ entries }: { entries: DailyTimelineEntry[] }) {
         <LegendItem swatch="bg-muted" label="Semester break" />
         <LegendItem swatch="bg-primary/20 ring-1 ring-primary" label="Student Return" />
         <LegendItem swatch="bg-primary/15" label="Grade 12 exam (school open)" />
+        <LegendItem swatch="bg-transparent ring-1 ring-muted-foreground/60" label="Last day of year (no attendance)" />
         <LegendItem swatch="bg-transparent" outline label="Ordinary teaching day" />
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
