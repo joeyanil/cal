@@ -25,7 +25,7 @@ export function RebuildTimelineButton({ yearId }: { yearId: string }) {
       const publishBody = await publishRes.json()
       if (!publishBody.success) throw new Error(publishBody.error.message)
 
-      setResult(`Published — ${buildBody.data.entryCount} days.`)
+      setResult(`Published — ${buildBody.data.entryCount} calendar days, ${buildBody.data.teachingDays} of them learning days.`)
       router.refresh()
     } catch (err) {
       setResult(err instanceof Error ? `Failed: ${err.message}` : 'Failed to rebuild the timeline.')

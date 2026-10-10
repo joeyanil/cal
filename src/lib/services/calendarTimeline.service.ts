@@ -178,7 +178,7 @@ export async function buildCandidateTimeline(
   supabase: SupabaseClient<Database>,
   ctx: AuthContext,
   academicYearId: string,
-): Promise<{ buildId: string; entryCount: number }> {
+): Promise<{ buildId: string; entryCount: number; teachingDays: number }> {
   if (!can(ctx, 'calendar.build_timeline')) throw new AppError('FORBIDDEN', 403)
 
   {
@@ -221,7 +221,7 @@ export async function buildCandidateTimeline(
     }
   }
 
-  return { buildId: build.id, entryCount: entries.length }
+  return { buildId: build.id, entryCount: entries.length, teachingDays: entries.filter((e) => e.teachingDay).length }
 }
 
 /** Promotes a CANDIDATE build to CURRENT, atomically, via the
@@ -291,7 +291,7 @@ export async function rebuildAndPublishTimeline(
   supabase: SupabaseClient<Database>,
   ctx: AuthContext,
   academicYearId: string,
-): Promise<{ buildId: string; entryCount: number }> {
+): Promise<{ buildId: string; entryCount: number; teachingDays: number }> {
   const result = await buildCandidateTimeline(supabase, ctx, academicYearId)
   await publishTimelineBuild(supabase, ctx, result.buildId)
   return result
