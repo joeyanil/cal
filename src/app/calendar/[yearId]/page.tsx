@@ -8,6 +8,7 @@ import { LifecycleBadge } from '@/components/ui/badge'
 import { ValidationPanel } from '@/components/calendar/ValidationPanel'
 import { ErrorState } from '@/components/calendar/ErrorState'
 import { RebuildTimelineButton } from '@/components/calendar/RebuildTimelineButton'
+import { YearStatusCard } from '@/components/calendar/YearStatusCard'
 import { formatEthiopian, hasBlockingErrors } from '@/lib/calendar'
 export const dynamic = 'force-dynamic'
 
@@ -67,6 +68,8 @@ export default async function AcademicYearPage({ params }: Props) {
             </p>
           )}
         </Panel>
+
+        <YearStatusCard yearId={yearId} status={year.status} />
 
         <ValidationPanel issues={issues} />
       </div>

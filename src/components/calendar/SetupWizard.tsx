@@ -8,6 +8,7 @@ import { EthiopianDateField } from './EthiopianDateField'
 import {
   ALL_EXAM_KEYS,
   EXAM_TYPES,
+  FIXED_HOLIDAY_KEYS,
   HOLIDAY_TYPES,
   MOVABLE_HOLIDAY_KEYS,
   STEP_KEYS,
@@ -35,6 +36,7 @@ import type {
   ExamShiftSuggestion,
   ExamTypeKey,
   HolidayOccurrence,
+  HolidayTypeKey,
   ISODate,
   Semester,
   SetupDraft,
@@ -48,6 +50,7 @@ interface Props {
   year: AcademicYear
   semesters: Semester[]
   holidays: HolidayOccurrence[]
+  notObserved?: HolidayTypeKey[]
   exams: ExamInstance[]
   studentReturn: StudentReturnDay | null
 }
@@ -79,7 +82,7 @@ const STEP_META: Record<StepKey, { label: string; title: string; why: string }> 
   holidays: {
     label: 'Holidays',
     title: 'Which days have no school?',
-    why: 'The five permanent holidays are already counted. Add the four that move every year.',
+    why: 'The permanent holidays are already counted. Switch off any the school does not observe, and add the dates of the four that move every year.',
   },
   exams: {
     label: 'Exams',
@@ -161,6 +164,21 @@ function RangeFields({
   )
 }
 
+function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${checked ? 'bg-primary' : 'bg-slate-300'}`}
+    >
+      <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+    </button>
+  )
+}
+
 function Stepper({
   current,
   maxReached,
@@ -216,10 +234,10 @@ function Stepper({
 
 // ------------------------------------------------------------------ wizard
 
-export function SetupWizard({ yearId, year, semesters, holidays, exams, studentReturn }: Props) {
+export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [], exams, studentReturn }: Props) {
   const router = useRouter()
   const fixed = useMemo(() => fixedHolidaysFor(yearId, year.yearEc, holidays), [yearId, year.yearEc, holidays])
-  const initial = useMemo(() => draftFromData({ year, semesters, holidays, exams, studentReturn }), [year, semesters, holidays, exams, studentReturn])
+  const initial = useMemo(() => draftFromData({ year, semesters, holidays, notObserved, exams, studentReturn }), [year, semesters, holidays, notObserved, exams, studentReturn])
 
   const [draft, setDraft] = useState<SetupDraft>(initial)
   const [saved, setSaved] = useState<SetupDraft>(initial)
@@ -278,8 +296,12 @@ export function SetupWizard({ yearId, year, semesters, holidays, exams, studentR
 
   async function saveStep(key: StepKey) {
     const y = year.id
-    if (key === 'year' && JSON.stringify(draft.year) !== JSON.stringify(saved.year)) {
-      await call(`/api/v1/academic-years/${y}`, 'PATCH', { startDate: draft.year.start, endDate: draft.year.end })
+    if (key === 'year' && (JSON.stringify(draft.year) !== JSON.stringify(saved.year) || draft.ministryTarget !== saved.ministryTarget)) {
+      await call(`/api/v1/academic-years/${y}`, 'PATCH', {
+        startDate: draft.year.start,
+        endDate: draft.year.end,
+        ministryTargetDays: draft.ministryTarget ? Number(draft.ministryTarget) : null,
+      })
     }
     if (key === 'semesters') {
       for (const [order, cur, prev] of [[1, draft.sem1, saved.sem1], [2, draft.sem2, saved.sem2]] as const) {
@@ -289,10 +311,22 @@ export function SetupWizard({ yearId, year, semesters, holidays, exams, studentR
       }
     }
     if (key === 'holidays') {
-      for (const k of MOVABLE_HOLIDAY_KEYS) {
-        if (draft.movable[k] && draft.movable[k] !== saved.movable[k]) {
-          await call(`/api/v1/academic-years/${y}/holidays`, 'POST', { action: 'enter_movable', holidayTypeKey: k, date: draft.movable[k], closesSchool: true })
+      for (const k of FIXED_HOLIDAY_KEYS) {
+        if (draft.closes[k] !== saved.closes[k]) {
+          await call(`/api/v1/academic-years/${y}/holidays/${k}`, 'PATCH', { closesSchool: draft.closes[k] })
         }
+      }
+      for (const k of MOVABLE_HOLIDAY_KEYS) {
+        const closes = draft.closes[k]
+        const changed = closes !== saved.closes[k] || (closes && draft.movable[k] !== saved.movable[k])
+        if (!changed) continue
+        if (closes && !draft.movable[k]) continue // switched back on, date still to come
+        await call(`/api/v1/academic-years/${y}/holidays`, 'POST', {
+          action: 'enter_movable',
+          holidayTypeKey: k,
+          date: closes ? draft.movable[k] : null,
+          closesSchool: closes,
+        })
       }
     }
     if (key === 'exams') {
@@ -308,12 +342,18 @@ export function SetupWizard({ yearId, year, semesters, holidays, exams, studentR
     }
     setSaved((prev) => {
       const next = { ...prev }
-      if (key === 'year') next.year = draft.year
+      if (key === 'year') {
+        next.year = draft.year
+        next.ministryTarget = draft.ministryTarget
+      }
       if (key === 'semesters') {
         next.sem1 = draft.sem1
         next.sem2 = draft.sem2
       }
-      if (key === 'holidays') next.movable = draft.movable
+      if (key === 'holidays') {
+        next.movable = draft.movable
+        next.closes = draft.closes
+      }
       if (key === 'exams') next.exams = draft.exams
       if (key === 'return') next.studentReturn = draft.studentReturn
       return next
@@ -383,7 +423,7 @@ export function SetupWizard({ yearId, year, semesters, holidays, exams, studentR
         <div>
           <p className="text-sm font-medium text-foreground">{EXAM_TYPES[key].name}</p>
           <p className="text-xs text-muted-foreground">
-            {EXAM_TYPES[key].closesSchool ? 'School closes for this exam.' : 'Held nationally — school stays open.'}
+            {EXAM_TYPES[key].closesSchool ? 'Held at school. No lessons and no attendance on these days.' : 'Held nationally. Lessons and attendance carry on.'}
           </p>
         </div>
         <RangeFields range={cur} yearEc={year.yearEc} resetKey={resetKeys[key] ?? 0} onChange={(r) => setDraft((d) => ({ ...d, exams: { ...d.exams, [key]: r } }))} />
@@ -416,11 +456,27 @@ export function SetupWizard({ yearId, year, semesters, holidays, exams, studentR
     switch (step) {
       case 'year':
         return (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <RangeFields range={draft.year} yearEc={year.yearEc} onChange={(r) => setDraft((d) => ({ ...d, year: r }))} />
             <p className="text-xs text-muted-foreground">
               Usually Meskerem 5 to Sene 30. Use the dates from this year&apos;s Ministry plan. All dates are in {year.yearEc} E.C.
             </p>
+            <div className="space-y-1">
+              <label htmlFor="ministry-target" className="text-sm font-medium text-foreground">
+                Ministry total school days <span className="font-normal text-muted-foreground">(optional)</span>
+              </label>
+              <input
+                id="ministry-target"
+                inputMode="numeric"
+                value={draft.ministryTarget}
+                onChange={(e) => setDraft((d) => ({ ...d, ministryTarget: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
+                placeholder="e.g. 210"
+                className="h-10 w-32 rounded-md border border-input bg-background px-3 text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                A reminder only. If you type the total from the Ministry plan, the calendar will show how it compares. It never changes any date or count.
+              </p>
+            </div>
             <Notes issues={review.byStep.year} />
           </div>
         )
@@ -439,50 +495,78 @@ export function SetupWizard({ yearId, year, semesters, holidays, exams, studentR
         )
       case 'holidays':
         return (
-          <div className="space-y-5">
+          <div className="space-y-6">
             <div>
-              <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-foreground">
-                <Lock className="h-3.5 w-3.5" /> Permanent holidays — counted automatically
+              <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <Lock className="h-3.5 w-3.5" /> Permanent holidays — added automatically
               </p>
+              <p className="mb-2 text-xs text-muted-foreground">The dates never change, so there is nothing to enter. Switch a holiday off if your school teaches on that day.</p>
               <ul className="divide-y divide-border rounded-lg border border-border">
-                {fixed.map((h) => (
-                  <li key={h.holidayTypeKey} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-                    <span className="text-foreground">{HOLIDAY_TYPES[h.holidayTypeKey].name}</span>
-                    <span className="text-muted-foreground">
-                      {formatShortWithWeekday(h.date)}
-                      {isWeekend(h.date) ? ' · weekend, no effect' : ''}
-                    </span>
-                  </li>
-                ))}
+                {fixed.map((h) => {
+                  const on = draft.closes[h.holidayTypeKey]
+                  return (
+                    <li key={h.holidayTypeKey} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{HOLIDAY_TYPES[h.holidayTypeKey].name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatShortWithWeekday(h.date)}
+                          {!on ? ' · school teaches this day' : isWeekend(h.date) ? ' · falls on a weekend, no effect' : ' · no school'}
+                        </p>
+                      </div>
+                      <Switch
+                        checked={on}
+                        label={`School closed for ${HOLIDAY_TYPES[h.holidayTypeKey].name}`}
+                        onChange={(v) => setDraft((d) => ({ ...d, closes: { ...d.closes, [h.holidayTypeKey]: v } }))}
+                      />
+                    </li>
+                  )
+                })}
               </ul>
             </div>
+
             <div className="space-y-3">
-              <p className="text-sm font-medium text-foreground">Holidays that move every year</p>
+              <div>
+                <p className="text-sm font-medium text-foreground">Holidays that move every year</p>
+                <p className="text-xs text-muted-foreground">Take the dates from the Ministry plan. If your school teaches on a holiday, switch it off and there is no date to enter.</p>
+              </div>
               {MOVABLE_HOLIDAY_KEYS.map((k) => {
+                const on = draft.closes[k]
                 const value = draft.movable[k]
                 return (
-                  <div key={k} className="space-y-1">
-                    <div className="flex flex-wrap items-end gap-3">
-                      <span className="w-full text-sm text-foreground sm:w-44">{HOLIDAY_TYPES[k].name}</span>
-                      <EthiopianDateField
-                        label="Date"
-                        name={k}
-                        ethiopianYear={year.yearEc}
-                        defaultValue={value}
-                        onValueChange={(v) => setDraft((d) => ({ ...d, movable: { ...d.movable, [k]: v } }))}
+                  <div key={k} className="space-y-2 rounded-lg border border-border p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{HOLIDAY_TYPES[k].name}</p>
+                        <p className="text-xs text-muted-foreground">{HOLIDAY_HINT[k]}</p>
+                      </div>
+                      <Switch
+                        checked={on}
+                        label={`School closed for ${HOLIDAY_TYPES[k].name}`}
+                        onChange={(v) => setDraft((d) => ({ ...d, closes: { ...d.closes, [k]: v } }))}
                       />
-                      {value && (
-                        <span className="pb-2 text-xs text-muted-foreground">
-                          {formatShortWithWeekday(isoDate(value))}
-                          {isWeekend(isoDate(value)) ? ' · weekend, no school anyway' : ''}
-                        </span>
-                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground">{HOLIDAY_HINT[k]}</p>
+                    {on ? (
+                      <div className="flex flex-wrap items-end gap-3">
+                        <EthiopianDateField
+                          label="Date"
+                          name={k}
+                          ethiopianYear={year.yearEc}
+                          defaultValue={value}
+                          onValueChange={(v) => setDraft((d) => ({ ...d, movable: { ...d.movable, [k]: v } }))}
+                        />
+                        {value && (
+                          <span className="pb-2 text-xs text-muted-foreground">
+                            {formatShortWithWeekday(isoDate(value))}
+                            {isWeekend(isoDate(value)) ? ' · weekend, no school anyway' : ''}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">School teaches on this day. No date needed.</p>
+                    )}
                   </div>
                 )
               })}
-              <p className="text-xs text-muted-foreground">Take these from the Ministry plan. They can&apos;t be calculated, so there is no auto-fill.</p>
             </div>
             <Notes issues={review.byStep.holidays} />
           </div>
@@ -577,13 +661,19 @@ function ReviewBody({
   onGo: (i: number) => void
 }) {
   const range = (r: DateRange) => (r.start && r.end ? `${formatShortEthiopian(isoDate(r.start))} – ${formatShortEthiopian(isoDate(r.end))}` : 'Not entered yet')
-  const enteredMovable = MOVABLE_HOLIDAY_KEYS.filter((k) => draft.movable[k]).length
+  const movableActive = MOVABLE_HOLIDAY_KEYS.filter((k) => draft.closes[k]).length
+  const enteredMovable = MOVABLE_HOLIDAY_KEYS.filter((k) => draft.closes[k] && draft.movable[k]).length
+  const switchedOff = [...FIXED_HOLIDAY_KEYS, ...MOVABLE_HOLIDAY_KEYS].filter((k) => !draft.closes[k]).length
   const rows: { label: string; value: string; step: StepKey }[] = [
     { label: 'School year', value: range(draft.year), step: 'year' },
     { label: 'Semester 1', value: range(draft.sem1), step: 'semesters' },
     { label: 'Semester 2', value: range(draft.sem2), step: 'semesters' },
     ...(semesterBreak ? [{ label: 'Break', value: `${formatShortEthiopian(semesterBreak.startDate)} – ${formatShortEthiopian(semesterBreak.endDate)}`, step: 'semesters' as StepKey }] : []),
-    { label: 'Holidays', value: `${fixedCount} permanent (automatic) + ${enteredMovable} of ${MOVABLE_HOLIDAY_KEYS.length} that move`, step: 'holidays' },
+    {
+      label: 'Holidays',
+      value: `${fixedCount} permanent (automatic) + ${enteredMovable} of ${movableActive} that move${switchedOff ? ` · ${switchedOff} switched off` : ''}`,
+      step: 'holidays',
+    },
     ...ALL_EXAM_KEYS.map((k) => ({ label: EXAM_TYPES[k].name, value: range(draft.exams[k]), step: 'exams' as StepKey })),
     { label: 'Student return', value: draft.studentReturn ? formatShortWithWeekday(isoDate(draft.studentReturn)) : 'Not entered yet', step: 'return' },
   ]
@@ -612,17 +702,19 @@ function ReviewBody({
       {review.counts && (
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-lg border border-border p-3">
-            <p className="text-2xl font-semibold text-foreground">{review.counts.teachingDays}</p>
-            <p className="text-sm text-muted-foreground">learning days — lessons and attendance</p>
+            <p className="text-2xl font-semibold text-emerald-700">{review.counts.teachingDays}</p>
+            <p className="text-sm text-muted-foreground">learning days — lessons are held and attendance is taken</p>
           </div>
           <div className="rounded-lg border border-border p-3">
-            <p className="text-2xl font-semibold text-foreground">{review.counts.ministryBasisDays}</p>
-            <p className="text-sm text-muted-foreground">
-              Ministry-basis days — adds {review.counts.examLostDays} exam day{review.counts.examLostDays === 1 ? '' : 's'}
-              {review.counts.studentReturnLostDays ? ' and the student-return day' : ''}, which have no attendance
-            </p>
+            <p className="text-2xl font-semibold text-indigo-700">{review.counts.examLostDays}</p>
+            <p className="text-sm text-muted-foreground">exam days — held at school, no lessons and no attendance</p>
           </div>
         </div>
+      )}
+      {review.counts && draft.ministryTarget && (
+        <p className="text-sm text-muted-foreground">
+          Ministry total you entered: {draft.ministryTarget} days. This calendar has {review.counts.ministryBasisDays} working days (learning + exam + student return).
+        </p>
       )}
 
       {groups.map(

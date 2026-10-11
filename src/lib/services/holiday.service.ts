@@ -38,7 +38,25 @@ export async function listHolidayOccurrences(
     .select()
     .eq('academic_year_id', academicYearId)
   if (error) throw new AppError('CALENDAR_LIST_FAILED', 500, error.message)
-  return (data ?? []).map(rowToOccurrence)
+  return (data ?? []).filter((r) => r.date !== null).map(rowToOccurrence)
+}
+
+/** Dated holidays plus the movable ones this school has switched off (a row
+ *  with no date and closes_school = false: it teaches that day, so there is
+ *  nothing to enter). */
+export async function listHolidayState(
+  supabase: SupabaseClient<Database>,
+  ctx: AuthContext,
+  academicYearId: string,
+): Promise<{ occurrences: HolidayOccurrence[]; notObserved: HolidayTypeKey[] }> {
+  if (!can(ctx, 'calendar.view')) throw new AppError('FORBIDDEN', 403)
+  const { data, error } = await supabase.from('holiday_occurrences').select().eq('academic_year_id', academicYearId)
+  if (error) throw new AppError('CALENDAR_LIST_FAILED', 500, error.message)
+  const rows = data ?? []
+  return {
+    occurrences: rows.filter((r) => r.date !== null).map(rowToOccurrence),
+    notObserved: rows.filter((r) => r.date === null).map((r) => r.holiday_type_key as HolidayTypeKey),
+  }
 }
 
 /** Seeds the five fixed holidays' auto-proposed occurrences for a new year
@@ -88,20 +106,29 @@ export async function ensureFixedHolidays(
   yearEc: number,
   userId: string | null,
 ): Promise<void> {
+  const now = new Date().toISOString()
+  // One holiday at a time: if the database does not know a newer holiday yet
+  // (its migration has not been run), that one is skipped and the rest still
+  // go in.
+  for (const p of proposeFixedHolidayOccurrences(academicYearId, yearEc)) {
+    try {
+      await supabase.from('holiday_occurrences').upsert(
+        {
+          academic_year_id: p.academicYearId,
+          holiday_type_key: p.holidayTypeKey,
+          date: p.date,
+          closes_school: p.closesSchool,
+          source: p.source,
+          confirmed_at: now,
+          confirmed_by: userId,
+        },
+        { onConflict: 'academic_year_id,holiday_type_key', ignoreDuplicates: true },
+      )
+    } catch {
+      // Best effort by design.
+    }
+  }
   try {
-    const now = new Date().toISOString()
-    await supabase.from('holiday_occurrences').upsert(
-      proposeFixedHolidayOccurrences(academicYearId, yearEc).map((p) => ({
-        academic_year_id: p.academicYearId,
-        holiday_type_key: p.holidayTypeKey,
-        date: p.date,
-        closes_school: p.closesSchool,
-        source: p.source,
-        confirmed_at: now,
-        confirmed_by: userId,
-      })),
-      { onConflict: 'academic_year_id,holiday_type_key', ignoreDuplicates: true },
-    )
     // Older rows that were proposed but never clicked "Confirm".
     await supabase
       .from('holiday_occurrences')
@@ -176,11 +203,15 @@ export async function confirmFixedHoliday(
   return rowToOccurrence(data)
 }
 
-export const enterMovableHolidaySchema = z.object({
-  holidayTypeKey: z.enum(['SIKLET', 'FASIKA', 'EID_FITR', 'EID_ADHA']),
-  date: isoDateSchema,
-  closesSchool: z.boolean().default(true),
-})
+export const enterMovableHolidaySchema = z
+  .object({
+    holidayTypeKey: z.enum(['SIKLET', 'FASIKA', 'EID_FITR', 'EID_ADHA']),
+    /** Required when the school closes. Left out when the school teaches on
+     *  this holiday — there is then no date to enter. */
+    date: isoDateSchema.nullable().optional(),
+    closesSchool: z.boolean().default(true),
+  })
+  .refine((v) => !v.closesSchool || !!v.date, { message: 'A date is required when the school closes for this holiday.', path: ['date'] })
 
 /** The only way a movable holiday's date ever enters the system — an admin
  *  typing in the confirmed Ministry-plan date (mission §8). There is no
@@ -200,12 +231,14 @@ export async function enterMovableHoliday(
 
   // Runs the same domain-layer validation the DB trigger will also enforce
   // — fail fast with a clean AppError rather than a raw Postgres error.
-  createHolidayOccurrence({ academicYearId, holidayTypeKey, ethiopianYear: ethiopianYearForValidation, manualDate: date as never, closesSchool })
+  if (date) {
+    createHolidayOccurrence({ academicYearId, holidayTypeKey, ethiopianYear: ethiopianYearForValidation, manualDate: date as never, closesSchool })
+  }
 
   const { data, error } = await supabase
     .from('holiday_occurrences')
     .upsert(
-      { academic_year_id: academicYearId, holiday_type_key: holidayTypeKey, date, closes_school: closesSchool, source: 'ADMIN_ENTERED', confirmed_by: ctx.user.id, confirmed_at: new Date().toISOString() },
+      { academic_year_id: academicYearId, holiday_type_key: holidayTypeKey, date: date ?? null, closes_school: closesSchool, source: 'ADMIN_ENTERED', confirmed_by: ctx.user.id, confirmed_at: new Date().toISOString() },
       { onConflict: 'academic_year_id,holiday_type_key' },
     )
     .select()

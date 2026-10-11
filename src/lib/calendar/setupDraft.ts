@@ -21,6 +21,7 @@ import type {
   ExamInstance,
   ExamTypeKey,
   HolidayOccurrence,
+  HolidayTypeKey,
   MovableHolidayKey,
   Semester,
   StudentReturnDay,
@@ -39,8 +40,13 @@ export interface DateRange {
 
 export interface SetupDraft {
   year: DateRange
+  /** Optional reminder total from the Ministry plan, as typed ('' = none). */
+  ministryTarget: string
   sem1: DateRange
   sem2: DateRange
+  /** Does the school close for this holiday? Off = the school teaches that
+   *  day (and, for a movable holiday, no date needs entering). */
+  closes: Record<HolidayTypeKey, boolean>
   movable: Record<MovableHolidayKey, string>
   exams: Record<ExamTypeKey, DateRange>
   studentReturn: string
@@ -50,6 +56,8 @@ export function draftFromData(data: {
   year: AcademicYear
   semesters: Semester[]
   holidays: HolidayOccurrence[]
+  /** Movable holidays the school switched off (no date stored). */
+  notObserved?: HolidayTypeKey[]
   exams: ExamInstance[]
   studentReturn: StudentReturnDay | null
 }): SetupDraft {
@@ -57,8 +65,17 @@ export function draftFromData(data: {
     const s = data.semesters.find((x) => x.order === order)
     return { start: s?.startDate ?? '', end: s?.endDate ?? '' }
   }
+  const off = new Set(data.notObserved ?? [])
+  const closes = Object.fromEntries(
+    [...FIXED_HOLIDAY_KEYS, ...MOVABLE_HOLIDAY_KEYS].map((k) => {
+      const row = data.holidays.find((h) => h.holidayTypeKey === k)
+      return [k, off.has(k) ? false : (row?.closesSchool ?? true)]
+    }),
+  ) as Record<HolidayTypeKey, boolean>
   return {
     year: { start: data.year.startDate, end: data.year.endDate },
+    ministryTarget: data.year.ministryTargetDays ? String(data.year.ministryTargetDays) : '',
+    closes,
     sem1: sem(1),
     sem2: sem(2),
     movable: Object.fromEntries(
@@ -102,8 +119,8 @@ export function draftToConfig(draft: SetupDraft, year: AcademicYear, fixedHolida
       status: 'UPCOMING',
     }) as Semester
   const holidayOccurrences: HolidayOccurrence[] = [
-    ...fixedHolidays,
-    ...MOVABLE_HOLIDAY_KEYS.filter((k) => draft.movable[k]).map(
+    ...fixedHolidays.map((h) => ({ ...h, closesSchool: draft.closes[h.holidayTypeKey] ?? true })),
+    ...MOVABLE_HOLIDAY_KEYS.filter((k) => draft.closes[k] && draft.movable[k]).map(
       (k) =>
         ({
           id: `draft-${k}`,
@@ -124,10 +141,12 @@ export function draftToConfig(draft: SetupDraft, year: AcademicYear, fixedHolida
   const studentReturn: StudentReturnDay | null = draft.studentReturn
     ? ({ id: 'draft-return', academicYearId: year.id, date: isoDate(draft.studentReturn) } as StudentReturnDay)
     : null
+  const notObservedHolidays = MOVABLE_HOLIDAY_KEYS.filter((k) => !draft.closes[k])
   return {
     academicYear,
     semesters: [semester(1, draft.sem1), semester(2, draft.sem2)],
     holidayOccurrences,
+    notObservedHolidays,
     examInstances,
     studentReturn,
   }

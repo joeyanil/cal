@@ -47,7 +47,8 @@ export async function runCalendarValidation(
       endDate: s.end_date as ISODate | null,
       status: s.status,
     })),
-    holidayOccurrences: (holidays ?? []).map((h) => ({
+    notObservedHolidays: (holidays ?? []).filter((h) => h.date === null).map((h) => h.holiday_type_key as never),
+    holidayOccurrences: (holidays ?? []).filter((h) => h.date !== null).map((h) => ({
       id: h.id,
       academicYearId: h.academic_year_id,
       holidayTypeKey: h.holiday_type_key,

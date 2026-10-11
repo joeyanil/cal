@@ -58,6 +58,12 @@ export const HOLIDAY_TYPES: Record<HolidayTypeKey, HolidayType> = {
     movable: false,
     fixedEthiopian: { month: 8, day: 27 }, // Miazia 27
   },
+  DERG_DOWNFALL: {
+    key: 'DERG_DOWNFALL',
+    name: 'Downfall of the Derg',
+    movable: false,
+    fixedEthiopian: { month: 9, day: 20 }, // Ginbot 20
+  },
   SIKLET: { key: 'SIKLET', name: 'Siklet (Good Friday)', movable: true },
   FASIKA: { key: 'FASIKA', name: 'Fasika (Easter)', movable: true },
   EID_FITR: { key: 'EID_FITR', name: 'Eid al-Fitr', movable: true },

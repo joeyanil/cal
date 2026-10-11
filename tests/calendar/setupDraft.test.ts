@@ -27,7 +27,7 @@ function complete() {
 
 describe('permanent holidays', () => {
   it('are always present with no admin action, even if nothing is stored', () => {
-    expect(fixed.map((h) => h.holidayTypeKey)).toEqual(['NEW_YEAR', 'GENNA', 'TIMKAT', 'ADWA', 'PATRIOTS'])
+    expect(fixed.map((h) => h.holidayTypeKey)).toEqual(['NEW_YEAR', 'GENNA', 'TIMKAT', 'ADWA', 'PATRIOTS', 'DERG_DOWNFALL'])
     expect(fixed.every((h) => h.closesSchool)).toBe(true)
     const r = reviewDraft(empty(), year, fixed)
     expect(r.issues.some((i) => i.code === 'CALENDAR_HOLIDAY_OCCURRENCE_MISSING' && /GENNA|TIMKAT|ADWA|PATRIOTS|NEW_YEAR/.test(i.message))).toBe(false)
@@ -89,5 +89,37 @@ describe('localizeMessage', () => {
     expect(out).toContain('Tir')
     expect(out).toContain('Timkat')
     expect(out).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+  })
+})
+
+describe('holiday switches', () => {
+  it('a movable holiday switched off needs no date and is not "missing"', () => {
+    const d = complete()
+    d.closes.FASIKA = false
+    d.movable.FASIKA = ''
+    const r = reviewDraft(d, year, fixed)
+    expect(r.missing.some((i) => /FASIKA/.test(i.message))).toBe(false)
+    expect(r.errors).toEqual([])
+  })
+
+  it('a movable holiday left on with no date is still missing', () => {
+    const d = complete()
+    d.movable.FASIKA = ''
+    expect(reviewDraft(d, year, fixed).missing.some((i) => /FASIKA/.test(i.message))).toBe(true)
+  })
+
+  it('switching a permanent holiday off turns that day back into a learning day', () => {
+    const on = reviewDraft(complete(), year, fixed).counts!.teachingDays
+    const d = complete()
+    d.closes.ADWA = false // Yekatit 23, a Tuesday
+    expect(reviewDraft(d, year, fixed).counts!.teachingDays).toBe(on + 1)
+  })
+
+  it('Ginbot 20 is on by default and costs one school day (a Friday)', () => {
+    expect(complete().closes.DERG_DOWNFALL).toBe(true)
+    const on = reviewDraft(complete(), year, fixed).counts!.teachingDays
+    const d = complete()
+    d.closes.DERG_DOWNFALL = false
+    expect(reviewDraft(d, year, fixed).counts!.teachingDays).toBe(on + 1)
   })
 })

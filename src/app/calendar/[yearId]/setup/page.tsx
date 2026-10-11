@@ -3,7 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth'
 import { createServerClient } from '@/lib/supabase/server'
 import { getAcademicYear, listAcademicYears } from '@/lib/services/academicYear.service'
 import { listSemesters } from '@/lib/services/semester.service'
-import { ensureFixedHolidays, listHolidayOccurrences } from '@/lib/services/holiday.service'
+import { ensureFixedHolidays, listHolidayState } from '@/lib/services/holiday.service'
 import { listExamInstances } from '@/lib/services/exam.service'
 import { getStudentReturn } from '@/lib/services/studentReturn.service'
 import { SetupWizard } from '@/components/calendar/SetupWizard'
@@ -23,11 +23,11 @@ export default async function SetupPage({ params }: Props) {
     // Permanent holidays count from the moment the year exists — no admin step.
     const yearForSeed = await getAcademicYear(supabase, ctx, yearId)
     await ensureFixedHolidays(supabase, yearId, yearForSeed.yearEc, ctx.user.id)
-    const [year, years, semesters, holidays, exams, studentReturn] = await Promise.all([
+    const [year, years, semesters, holidayState, exams, studentReturn] = await Promise.all([
       getAcademicYear(supabase, ctx, yearId),
       listAcademicYears(supabase, ctx),
       listSemesters(supabase, ctx, yearId),
-      listHolidayOccurrences(supabase, ctx, yearId),
+      listHolidayState(supabase, ctx, yearId),
       listExamInstances(supabase, ctx, yearId),
       getStudentReturn(supabase, ctx, yearId),
     ])
@@ -47,7 +47,8 @@ export default async function SetupPage({ params }: Props) {
           yearId={yearId}
           year={year}
           semesters={semesters}
-          holidays={holidays}
+          holidays={holidayState.occurrences}
+          notObserved={holidayState.notObserved}
           exams={exams}
           studentReturn={studentReturn}
         />

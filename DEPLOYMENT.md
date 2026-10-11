@@ -51,6 +51,8 @@ for exactly what to do with it once a real K2 exists to merge into.
    supabase/migrations/0018_calendar_timeline_multi_fact.sql
    supabase/migrations/0019_calendar_closed_year_insert_protection.sql
    supabase/migrations/0020_calendar_exam_holiday_week.sql
+   supabase/migrations/0021a_holiday_derg_enum.sql        (run ALONE, first)
+   supabase/migrations/0021b_holiday_switches_and_ministry_reminder.sql
    ```
 
    (If your Supabase project's CLI/migration tooling wants everything in
@@ -148,3 +150,15 @@ seed):
   that file onward rather than from the beginning (earlier files are
   idempotent-safe to skip once successfully applied, but not designed to
   be re-run after later ones already have been).
+
+
+## Keeping a free Supabase project awake
+
+Free projects pause after about a week with no activity. The workflow in
+`docs/keep-supabase-awake.yml` sends one small request every 3 days. It must be
+moved to `.github/workflows/keep-supabase-awake.yml` (done in the GitHub web
+uI: open the file, tap the pencil, change the file path, commit). Add two repository secrets (GitHub > Settings > Secrets and variables
+> Actions): `SUPABASE_URL` and `SUPABASE_ANON_KEY`, then run the workflow once
+by hand (Actions > Keep Supabase awake > Run workflow) to confirm it says
+"Project is awake." GitHub stops scheduled workflows in a repository with no
+activity for 60 days; any push re-enables it.
