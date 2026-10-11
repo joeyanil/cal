@@ -17,6 +17,7 @@ export type HolidayTypeKeyDb =
   | 'TIMKAT'
   | 'ADWA'
   | 'PATRIOTS'
+  | 'DERG_DOWNFALL'
   | 'SIKLET'
   | 'FASIKA'
   | 'EID_FITR'
@@ -49,6 +50,7 @@ export interface Database {
           end_date: string
           is_default_boundary: boolean
           status: AcademicYearStatus
+          ministry_target_days: number | null
           /** Advanced by the database itself (Migration 0015 triggers) on
            *  every real change to an authoritative fact belonging to this
            *  year — never settable directly by authenticated (column-level
@@ -67,6 +69,7 @@ export interface Database {
           end_date: string
           is_default_boundary?: boolean
           status?: AcademicYearStatus
+          ministry_target_days?: number | null
           created_by?: string | null
         }
         Update: Partial<Database['public']['Tables']['academic_years']['Insert']>
@@ -108,7 +111,9 @@ export interface Database {
           id: string
           academic_year_id: string
           holiday_type_key: HolidayTypeKeyDb
-          date: string
+          /** NULL only for a movable holiday this school does not observe
+           *  (closes_school = false) — nothing to enter, school teaches. */
+          date: string | null
           closes_school: boolean
           source: HolidaySourceDb
           confirmed_by: string | null
@@ -120,7 +125,7 @@ export interface Database {
           id?: string
           academic_year_id: string
           holiday_type_key: HolidayTypeKeyDb
-          date: string
+          date?: string | null
           closes_school?: boolean
           source: HolidaySourceDb
           confirmed_by?: string | null

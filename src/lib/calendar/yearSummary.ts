@@ -10,7 +10,10 @@
  * the day is: a holiday that falls on a weekend (no school day is lost) and
  * the Grade 12 national exam (K2 stays open and teaching).
  */
-import type { DailyTimelineEntry } from './types'
+import { isWeekend, type ISODate } from './date-utils'
+import { HOLIDAY_TYPES } from './holidays'
+import { FIXED_HOLIDAY_KEYS, MOVABLE_HOLIDAY_KEYS } from './types'
+import type { DailyTimelineEntry, HolidayOccurrence, HolidayTypeKey } from './types'
 
 export const DAY_KINDS = ['LEARNING', 'EXAM_CLOSED', 'HOLIDAY', 'BREAK', 'RETURN', 'YEAR_END', 'WEEKEND'] as const
 export type DayKind = (typeof DAY_KINDS)[number] | 'OTHER'
@@ -86,5 +89,84 @@ export function summarizeYear(entries: DailyTimelineEntry[]): YearSummary {
     holidays,
     learningBySemester,
     learningByMonth,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Holidays: every one the school has, and what it actually did to the year.
+// ---------------------------------------------------------------------------
+
+export type HolidayStatus = 'COUNTED' | 'WEEKEND' | 'OUTSIDE_YEAR' | 'NOT_OBSERVED' | 'NOT_ENTERED'
+
+export interface HolidayRow {
+  key: HolidayTypeKey
+  name: string
+  date: ISODate | null
+  status: HolidayStatus
+  /** One plain sentence saying what this holiday did (or did not do). */
+  note: string
+}
+
+export function buildHolidayList(args: {
+  occurrences: HolidayOccurrence[]
+  notObserved: HolidayTypeKey[]
+  yearStart: ISODate
+  yearEnd: ISODate
+}): HolidayRow[] {
+  const rows: HolidayRow[] = []
+  for (const key of [...FIXED_HOLIDAY_KEYS, ...MOVABLE_HOLIDAY_KEYS]) {
+    const name = HOLIDAY_TYPES[key].name
+    const occ = args.occurrences.find((h) => h.holidayTypeKey === key)
+    if (args.notObserved.includes(key) || (occ && !occ.closesSchool)) {
+      rows.push({ key, name, date: occ?.date ?? null, status: 'NOT_OBSERVED', note: 'This school teaches on this day, so nothing is lost.' })
+    } else if (!occ) {
+      // A year created before this holiday existed simply does not have it.
+      if (key === 'DERG_DOWNFALL') continue
+      rows.push({ key, name, date: null, status: 'NOT_ENTERED', note: 'The date has not been entered yet.' })
+    } else if (occ.date < args.yearStart) {
+      rows.push({ key, name, date: occ.date, status: 'OUTSIDE_YEAR', note: 'Falls before the school year starts, so it does not count.' })
+    } else if (occ.date > args.yearEnd) {
+      rows.push({ key, name, date: occ.date, status: 'OUTSIDE_YEAR', note: 'Falls after the school year ends, so it does not count.' })
+    } else if (isWeekend(occ.date)) {
+      rows.push({ key, name, date: occ.date, status: 'WEEKEND', note: 'Falls on a weekend, so no school day is lost.' })
+    } else {
+      rows.push({ key, name, date: occ.date, status: 'COUNTED', note: 'No school this day. It is one of the days without lessons.' })
+    }
+  }
+  return rows
+}
+
+// ---------------------------------------------------------------------------
+// The plain-language summary of the year.
+// ---------------------------------------------------------------------------
+
+export interface YearStory {
+  learningDays: number
+  semester1: number
+  semester2: number
+  noLessonDays: number
+  /** The pieces of "the other N days", in reading order, already worded. */
+  noLessonParts: string[]
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`
+}
+
+export function describeYear(s: YearSummary): YearStory {
+  const parts: string[] = []
+  if (s.counts.WEEKEND) parts.push(plural(s.counts.WEEKEND, 'weekend day', 'weekend days'))
+  if (s.counts.EXAM_CLOSED) parts.push(plural(s.counts.EXAM_CLOSED, 'exam day', 'exam days'))
+  if (s.counts.HOLIDAY) parts.push(plural(s.counts.HOLIDAY, 'holiday', 'holidays'))
+  if (s.counts.BREAK) parts.push(plural(s.counts.BREAK, 'break day', 'break days'))
+  if (s.counts.RETURN) parts.push('the student-return day')
+  if (s.counts.YEAR_END) parts.push('the last day of the year')
+  if (s.counts.OTHER) parts.push(plural(s.counts.OTHER, 'other day', 'other days'))
+  return {
+    learningDays: s.learningDays,
+    semester1: s.learningBySemester[1],
+    semester2: s.learningBySemester[2],
+    noLessonDays: s.noLessonDays,
+    noLessonParts: parts,
   }
 }

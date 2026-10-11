@@ -39,6 +39,9 @@ export interface AcademicYear {
    *  replaced. */
   isDefaultBoundary: boolean
   status: AcademicYearStatus
+  /** Optional reminder: the Ministry's official total school days for this
+   *  year (e.g. 210). Used only to compare against; never drives a calculation. */
+  ministryTargetDays?: number | null
 }
 
 export interface Semester {
@@ -54,7 +57,7 @@ export interface Semester {
 // Holidays (Domain Inventory items 4, 5)
 // ---------------------------------------------------------------------------
 
-/** The five permanent holidays with a fixed Ethiopian-calendar date
+/** The six permanent holidays with a fixed Ethiopian-calendar date
  *  (mission item 8 / Deep Domain File 2 item 4). */
 export const FIXED_HOLIDAY_KEYS = [
   'NEW_YEAR',
@@ -62,6 +65,9 @@ export const FIXED_HOLIDAY_KEYS = [
   'TIMKAT',
   'ADWA',
   'PATRIOTS',
+  // Added later: a national public holiday the Ministry plan does not list.
+  // Seeded like the others, but each school can switch it off.
+  'DERG_DOWNFALL',
 ] as const
 export type FixedHolidayKey = (typeof FIXED_HOLIDAY_KEYS)[number]
 

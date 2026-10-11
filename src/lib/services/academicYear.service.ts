@@ -25,6 +25,7 @@ function rowToAcademicYear(row: Database['public']['Tables']['academic_years']['
     endDate: row.end_date as AcademicYear['endDate'],
     isDefaultBoundary: row.is_default_boundary,
     status: row.status,
+    ministryTargetDays: row.ministry_target_days ?? null,
   }
 }
 
@@ -94,6 +95,8 @@ export async function createAcademicYear(
 export const updateAcademicYearBoundarySchema = z.object({
   startDate: isoDateSchema,
   endDate: isoDateSchema,
+  /** Optional reminder total from the Ministry plan, for comparison only. */
+  ministryTargetDays: z.number().int().min(1).max(366).nullable().optional(),
 })
 
 /** Replaces the default boundary with the real Ministry-plan dates
@@ -107,11 +110,16 @@ export async function updateAcademicYearBoundary(
   input: z.infer<typeof updateAcademicYearBoundarySchema>,
 ): Promise<AcademicYear> {
   if (!can(ctx, 'calendar.manage')) throw new AppError('FORBIDDEN', 403)
-  const { startDate, endDate } = updateAcademicYearBoundarySchema.parse(input)
+  const { startDate, endDate, ministryTargetDays } = updateAcademicYearBoundarySchema.parse(input)
 
   const { data, error } = await supabase
     .from('academic_years')
-    .update({ start_date: startDate, end_date: endDate, is_default_boundary: false })
+    .update({
+      start_date: startDate,
+      end_date: endDate,
+      is_default_boundary: false,
+      ...(ministryTargetDays !== undefined ? { ministry_target_days: ministryTargetDays } : {}),
+    })
     .eq('id', yearId)
     .select()
     .single()
@@ -163,11 +171,11 @@ export async function transitionAcademicYearStatus(
   const { to } = transitionAcademicYearStatusSchema.parse(input)
 
   if (to === 'READY' || to === 'ACTIVE') {
-    const [{ config, dependencyRules }, fullYear] = await Promise.all([
+    const [{ config, dependencyRules, notObservedHolidays }, fullYear] = await Promise.all([
       loadConfiguration(supabase, yearId),
       getAcademicYear(supabase, ctx, yearId),
     ])
-    const issues = validateCalendarConfiguration({ ...config, academicYear: fullYear, dependencyRules })
+    const issues = validateCalendarConfiguration({ ...config, academicYear: fullYear, dependencyRules, notObservedHolidays })
     const blocking = issues.filter((i) => i.severity === 'ERROR' || i.severity === 'MISSING')
     if (blocking.length > 0) {
       throw new AppError(

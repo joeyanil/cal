@@ -308,10 +308,11 @@ describe('2019 E.C. -- real Ministry plan, Part 2: full setup with every Ministr
     expect(breakdown.studentReturnLostDays).toBe(1)
   })
 
-  it('verifies holiday counts -- 8 of the 9 catalog holidays fall inside this year (New Year precedes the corrected start)', () => {
+  it('verifies holiday counts -- 9 of the 10 catalog holidays fall inside this year (New Year precedes the corrected start)', () => {
     const holidaysOnTimeline = entries.filter((e) => e.holidays.length > 0)
     const uniqueHolidayKeys = new Set(holidaysOnTimeline.flatMap((e) => e.holidays.map((h) => h.typeKey)))
-    expect(uniqueHolidayKeys.size).toBe(8)
+    expect(uniqueHolidayKeys.size).toBe(9)
+    expect(uniqueHolidayKeys.has('DERG_DOWNFALL')).toBe(true) // Ginbot 20, added later
     expect(uniqueHolidayKeys.has('NEW_YEAR')).toBe(false) // Meskerem 1 is before Meskerem 4
     expect(uniqueHolidayKeys.has('GENNA')).toBe(true)
     expect(uniqueHolidayKeys.has('FASIKA')).toBe(true) // the disclosed source-gap value, still on the timeline

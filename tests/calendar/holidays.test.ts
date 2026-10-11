@@ -41,11 +41,11 @@ describe('holidays: fixed-date auto-proposal for 2019 E.C.', () => {
     expect(date).toBe('2026-09-11') // Meskerem 1, 2019 -> verified via ethiopian-date round trip
   })
 
-  it('proposes all five fixed holidays with distinct dates, in academic-year order', () => {
+  it('proposes all six fixed holidays with distinct dates, in academic-year order', () => {
     const occurrences = proposeFixedHolidayOccurrences('year-2019', 2019)
-    expect(occurrences).toHaveLength(5)
+    expect(occurrences).toHaveLength(6)
     const dates = occurrences.map((o) => o.date)
-    expect(new Set(dates).size).toBe(5) // all distinct
+    expect(new Set(dates).size).toBe(6) // all distinct
     // every one is source AUTO_PROPOSED, unconfirmed until admin reviews
     for (const o of occurrences) {
       expect(o.source).toBe('AUTO_PROPOSED')

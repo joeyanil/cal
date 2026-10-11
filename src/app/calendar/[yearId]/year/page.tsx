@@ -3,6 +3,8 @@ import { withAuth } from '@/lib/auth/withAuth'
 import { createServerClient } from '@/lib/supabase/server'
 import { getAcademicYear } from '@/lib/services/academicYear.service'
 import { getCurrentTimeline } from '@/lib/services/calendarTimeline.service'
+import { listHolidayState } from '@/lib/services/holiday.service'
+import { buildHolidayList } from '@/lib/calendar'
 import { YearView } from '@/components/calendar/YearView'
 import { ErrorState } from '@/components/calendar/ErrorState'
 import { Panel } from '@/components/ui/panel'
@@ -19,6 +21,13 @@ export default async function YearViewPage({ params }: Props) {
     const supabase = await createServerClient()
     const year = await getAcademicYear(supabase, ctx, yearId)
     const entries = await getCurrentTimeline(supabase, ctx, yearId)
+    const holidayState = await listHolidayState(supabase, ctx, yearId)
+    const holidays = buildHolidayList({
+      occurrences: holidayState.occurrences,
+      notObserved: holidayState.notObserved,
+      yearStart: year.startDate,
+      yearEnd: year.endDate,
+    })
 
     return (
       <div className="space-y-6">
@@ -30,7 +39,7 @@ export default async function YearViewPage({ params }: Props) {
             </Link>
           </div>
         </div>
-        <YearView entries={entries} />
+        <YearView entries={entries} holidays={holidays} ministryTargetDays={year.ministryTargetDays ?? null} />
       </div>
     )
   } catch (error) {

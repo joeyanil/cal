@@ -30,6 +30,7 @@ import type {
   DependencyRule,
   ExamInstance,
   HolidayOccurrence,
+  HolidayTypeKey,
   Semester,
   StudentReturnDay,
   ValidationIssue,
@@ -42,6 +43,9 @@ export interface ValidationInput {
   examInstances: ExamInstance[]
   studentReturn: StudentReturnDay | null
   dependencyRules: DependencyRule[]
+  /** Movable holidays this school has switched off (it teaches that day), so
+   *  there is no date to enter and nothing is "missing". */
+  notObservedHolidays?: HolidayTypeKey[]
 }
 
 export function validateCalendarConfiguration(input: ValidationInput): ValidationIssue[] {
@@ -119,7 +123,11 @@ export function validateCalendarConfiguration(input: ValidationInput): Validatio
 
   // --- MISSING: holidays -----------------------------------------------------
   const presentHolidayKeys = new Set(holidayOccurrences.map((h) => h.holidayTypeKey))
+  const notObserved = new Set(input.notObservedHolidays ?? [])
   for (const key of [...FIXED_HOLIDAY_KEYS, ...MOVABLE_HOLIDAY_KEYS]) {
+    // The Derg-downfall holiday is optional: a year created before it existed
+    // simply doesn't have it, and that is not something to enter by hand.
+    if (notObserved.has(key) || (key === 'DERG_DOWNFALL' && !presentHolidayKeys.has(key))) continue
     if (!presentHolidayKeys.has(key)) {
       issues.push({
         severity: 'MISSING',

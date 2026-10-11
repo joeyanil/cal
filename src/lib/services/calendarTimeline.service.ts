@@ -17,6 +17,7 @@ import {
   type CalendarConfiguration,
   type DailyTimelineEntry,
   type DependencyRule,
+  type HolidayTypeKey,
   type ISODate,
 } from '../calendar'
 
@@ -53,7 +54,7 @@ interface RawConfigSnapshot {
 export async function loadConfiguration(
   supabase: SupabaseClient<Database>,
   academicYearId: string,
-): Promise<{ config: CalendarConfiguration; configRevision: number; dependencyRules: DependencyRule[] }> {
+): Promise<{ config: CalendarConfiguration; configRevision: number; dependencyRules: DependencyRule[]; notObservedHolidays: HolidayTypeKey[] }> {
   const { data, error } = await supabase.rpc('fn_load_calendar_config_snapshot', {
     p_academic_year_id: academicYearId,
   })
@@ -79,7 +80,7 @@ export async function loadConfiguration(
       endDate: s.end_date as ISODate | null,
       status: s.status,
     })),
-    holidayOccurrences: (holidayOccurrences ?? []).map((h) => ({
+    holidayOccurrences: (holidayOccurrences ?? []).filter((h) => h.date !== null).map((h) => ({
       id: h.id,
       academicYearId: h.academic_year_id,
       holidayTypeKey: h.holiday_type_key,
@@ -116,7 +117,8 @@ export async function loadConfiguration(
     createdAt: d.created_at,
   }))
 
-  return { config, configRevision, dependencyRules }
+  const notObservedHolidays = (holidayOccurrences ?? []).filter((h) => h.date === null).map((h) => h.holiday_type_key as HolidayTypeKey)
+  return { config, configRevision, dependencyRules, notObservedHolidays }
 }
 
 function entryToRow(
