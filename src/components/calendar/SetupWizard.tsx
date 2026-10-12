@@ -164,6 +164,18 @@ function RangeFields({
   )
 }
 
+/** What one holiday does to the school year, in a sentence — so a switch never
+ *  looks like it did nothing when the honest answer is "nothing changes". */
+function holidayEffect(date: string, closes: boolean, yearStart: string, yearEnd: string): string {
+  if (!date) return closes ? '' : 'School teaches this day.'
+  const d = isoDate(date)
+  const day = formatShortWithWeekday(d)
+  if (date < yearStart) return closes ? `${day}. Before the school year starts, so it has no effect either way.` : `${day}. School teaches this day (it is before the year starts, so nothing changes).`
+  if (date > yearEnd) return closes ? `${day}. After the school year ends, so it has no effect.` : `${day}. School teaches this day (after the year ends, so nothing changes).`
+  if (isWeekend(d)) return closes ? `${day}. Falls on a weekend, so no school day is lost.` : `${day}. School teaches this day, but it is a weekend, so nothing changes.`
+  return closes ? `${day}. No school this day: one learning day less.` : `${day}. School teaches this day: counted as a learning day.`
+}
+
 function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
@@ -365,7 +377,16 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
     setBusy(true)
     try {
       if (step === 'review') {
+        // Anything changed but not yet saved (for example switches flipped
+        // and then jumping straight here) is saved first, so the calendar
+        // that gets built is always the one on screen.
+        for (const k of ['year', 'semesters', 'holidays', 'exams', 'return'] as StepKey[]) await saveStep(k)
         const build = await call(`/api/v1/academic-years/${yearId}/timeline/build`, 'POST')
+        if (review.counts && typeof build.teachingDays === 'number' && build.teachingDays !== review.counts.teachingDays) {
+          throw new ApiError(
+            `The saved calendar has ${build.teachingDays} learning days, but your settings give ${review.counts.teachingDays}. Nothing was published. Reload this page and check the Holidays step, then try again.`,
+          )
+        }
         await call(`/api/v1/academic-years/${yearId}/timeline/publish`, 'POST', { buildId: build.buildId })
         router.push(`/calendar/${yearId}`)
         router.refresh()
@@ -496,6 +517,11 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
       case 'holidays':
         return (
           <div className="space-y-6">
+            {review.counts && (
+              <p className="rounded-md bg-card px-3 py-2 text-sm text-foreground">
+                With these settings the school year has <strong className="text-emerald-700">{review.counts.teachingDays} learning days</strong>. This number updates as you switch holidays on and off.
+              </p>
+            )}
             <div>
               <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-foreground">
                 <Lock className="h-3.5 w-3.5" /> Permanent holidays — added automatically
@@ -508,10 +534,7 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
                     <li key={h.holidayTypeKey} className="flex items-center justify-between gap-3 px-3 py-2.5">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-foreground">{HOLIDAY_TYPES[h.holidayTypeKey].name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatShortWithWeekday(h.date)}
-                          {!on ? ' · school teaches this day' : isWeekend(h.date) ? ' · falls on a weekend, no effect' : ' · no school'}
-                        </p>
+                        <p className="text-xs text-muted-foreground">{holidayEffect(h.date, on, draft.year.start, draft.year.end)}</p>
                       </div>
                       <Switch
                         checked={on}
@@ -554,16 +577,11 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
                           defaultValue={value}
                           onValueChange={(v) => setDraft((d) => ({ ...d, movable: { ...d.movable, [k]: v } }))}
                         />
-                        {value && (
-                          <span className="pb-2 text-xs text-muted-foreground">
-                            {formatShortWithWeekday(isoDate(value))}
-                            {isWeekend(isoDate(value)) ? ' · weekend, no school anyway' : ''}
-                          </span>
-                        )}
                       </div>
                     ) : (
                       <p className="text-xs text-muted-foreground">School teaches on this day. No date needed.</p>
                     )}
+                    {on && value && <p className="text-xs text-muted-foreground">{holidayEffect(value, true, draft.year.start, draft.year.end)}</p>}
                   </div>
                 )
               })}
@@ -595,7 +613,7 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
           </div>
         )
       case 'review':
-        return <ReviewBody draft={draft} review={review} fixedCount={fixed.length} semesterBreak={semesterBreak} onGo={go} />
+        return <ReviewBody draft={draft} review={review} fixedCount={fixed.length} semesterBreak={semesterBreak} unsaved={dirty} onGo={go} />
     }
   }
 
@@ -652,8 +670,10 @@ function ReviewBody({
   review,
   fixedCount,
   semesterBreak,
+  unsaved,
   onGo,
 }: {
+  unsaved: boolean
   draft: SetupDraft
   review: ReturnType<typeof reviewDraft>
   fixedCount: number
@@ -685,6 +705,11 @@ function ReviewBody({
   ]
   return (
     <div className="space-y-5">
+      {unsaved && (
+        <p className="rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground">
+          You have changes that are not saved yet. They will be saved when you tap <strong>Save &amp; build calendar</strong>.
+        </p>
+      )}
       <dl className="divide-y divide-border rounded-lg border border-border">
         {rows.map((r, i) => (
           <div key={`${r.label}-${i}`} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
