@@ -2,7 +2,7 @@
   "name": "k2-calendar-engine",
   "version": "0.1.0",
   "private": true,
-  "description": "K2 Academic Calendar Engine — first-class TypeScript/Next.js subsystem of the K2 school platform, skinned in K2's locked Admin design system (20_Design_System.md).",
+  "description": "K2 Academic Calendar Engine \u2014 first-class TypeScript/Next.js subsystem of the K2 school platform, skinned in K2's locked Admin design system (20_Design_System.md).",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "test:integration": "vitest run --config tests-integration/vitest.config.ts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "1.1.1",

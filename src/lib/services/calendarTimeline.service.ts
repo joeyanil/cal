@@ -295,7 +295,7 @@ export async function rebuildAndPublishTimeline(
   academicYearId: string,
 ): Promise<{ buildId: string; entryCount: number; teachingDays: number }> {
   const result = await buildCandidateTimeline(supabase, ctx, academicYearId)
-  await publishTimelineBuild(supabase, ctx, result.buildId)
+  await publishTimelineBuild(supabase, ctx, { buildId: result.buildId })
   return result
 }
 
