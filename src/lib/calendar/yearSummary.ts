@@ -96,6 +96,21 @@ export function summarizeYear(entries: DailyTimelineEntry[]): YearSummary {
 // Holidays: every one the school has, and what it actually did to the year.
 // ---------------------------------------------------------------------------
 
+/**
+ * What a holiday's date does to the school year, worked out from the date
+ * itself — never from the holiday's name or a particular year. Holidays move
+ * across the week from year to year (Genna is a Thursday one year and a
+ * Saturday another), and the school year's own first and last day decide
+ * whether a date is inside it at all.
+ */
+export type HolidayImpact = 'SCHOOL_DAY' | 'WEEKEND' | 'BEFORE_YEAR' | 'AFTER_YEAR'
+
+export function holidayImpact(date: ISODate | string, yearStart: ISODate | string, yearEnd: ISODate | string): HolidayImpact {
+  if (date < yearStart) return 'BEFORE_YEAR'
+  if (date > yearEnd) return 'AFTER_YEAR'
+  return isWeekend(date as ISODate) ? 'WEEKEND' : 'SCHOOL_DAY'
+}
+
 export type HolidayStatus = 'COUNTED' | 'WEEKEND' | 'OUTSIDE_YEAR' | 'NOT_OBSERVED' | 'NOT_ENTERED'
 
 export interface HolidayRow {
@@ -123,14 +138,12 @@ export function buildHolidayList(args: {
       // A year created before this holiday existed simply does not have it.
       if (key === 'DERG_DOWNFALL') continue
       rows.push({ key, name, date: null, status: 'NOT_ENTERED', note: 'The date has not been entered yet.' })
-    } else if (occ.date < args.yearStart) {
-      rows.push({ key, name, date: occ.date, status: 'OUTSIDE_YEAR', note: 'Falls before the school year starts, so it does not count.' })
-    } else if (occ.date > args.yearEnd) {
-      rows.push({ key, name, date: occ.date, status: 'OUTSIDE_YEAR', note: 'Falls after the school year ends, so it does not count.' })
-    } else if (isWeekend(occ.date)) {
-      rows.push({ key, name, date: occ.date, status: 'WEEKEND', note: 'Falls on a weekend, so no school day is lost.' })
     } else {
-      rows.push({ key, name, date: occ.date, status: 'COUNTED', note: 'No school this day. It is one of the days without lessons.' })
+      const impact = holidayImpact(occ.date, args.yearStart, args.yearEnd)
+      if (impact === 'BEFORE_YEAR') rows.push({ key, name, date: occ.date, status: 'OUTSIDE_YEAR', note: 'Falls before the school year starts, so it does not count.' })
+      else if (impact === 'AFTER_YEAR') rows.push({ key, name, date: occ.date, status: 'OUTSIDE_YEAR', note: 'Falls after the school year ends, so it does not count.' })
+      else if (impact === 'WEEKEND') rows.push({ key, name, date: occ.date, status: 'WEEKEND', note: 'Falls on a weekend, so no school day is lost.' })
+      else rows.push({ key, name, date: occ.date, status: 'COUNTED', note: 'No school this day. It is one of the days without lessons.' })
     }
   }
   return rows

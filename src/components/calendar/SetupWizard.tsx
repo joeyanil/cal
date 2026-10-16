@@ -21,6 +21,7 @@ import {
   formatShortEthiopian,
   formatShortWithWeekday,
   friendlyLines,
+  holidayImpact,
   indexHolidaysByDate,
   isWeekend,
   isoDate,
@@ -168,12 +169,33 @@ function RangeFields({
  *  looks like it did nothing when the honest answer is "nothing changes". */
 function holidayEffect(date: string, closes: boolean, yearStart: string, yearEnd: string): string {
   if (!date) return closes ? '' : 'School teaches this day.'
-  const d = isoDate(date)
-  const day = formatShortWithWeekday(d)
-  if (date < yearStart) return closes ? `${day}. Before the school year starts, so it has no effect either way.` : `${day}. School teaches this day (it is before the year starts, so nothing changes).`
-  if (date > yearEnd) return closes ? `${day}. After the school year ends, so it has no effect.` : `${day}. School teaches this day (after the year ends, so nothing changes).`
-  if (isWeekend(d)) return closes ? `${day}. Falls on a weekend, so no school day is lost.` : `${day}. School teaches this day, but it is a weekend, so nothing changes.`
-  return closes ? `${day}. No school this day: one learning day less.` : `${day}. School teaches this day: counted as a learning day.`
+  const day = formatShortWithWeekday(isoDate(date))
+  switch (holidayImpact(date, yearStart, yearEnd)) {
+    case 'BEFORE_YEAR':
+      return closes ? `${day}. Before the school year starts, so it has no effect either way.` : `${day}. School teaches this day (it is before the year starts, so nothing changes).`
+    case 'AFTER_YEAR':
+      return closes ? `${day}. After the school year ends, so it has no effect.` : `${day}. School teaches this day (after the year ends, so nothing changes).`
+    case 'WEEKEND':
+      return closes ? `${day}. Falls on a weekend, so no school day is lost.` : `${day}. School teaches this day, but it is a weekend, so nothing changes.`
+    default:
+      return closes ? `${day}. No school this day: one learning day less.` : `${day}. School teaches this day: counted as a learning day.`
+  }
+}
+
+/** A holiday only changes the learning-day count if its date is a weekday
+ *  inside the school year — decided from the date, never from the name. */
+function holidayMatters(date: string, yearStart: string, yearEnd: string): boolean {
+  return !!date && holidayImpact(date, yearStart, yearEnd) === 'SCHOOL_DAY'
+}
+
+function EffectChip({ matters }: { matters: boolean }) {
+  return (
+    <span
+      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${matters ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600'}`}
+    >
+      {matters ? 'Changes the count' : 'No effect this year'}
+    </span>
+  )
 }
 
 function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
@@ -522,6 +544,26 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
                 With these settings the school year has <strong className="text-emerald-700">{review.counts.teachingDays} learning days</strong>. This number updates as you switch holidays on and off.
               </p>
             )}
+            {(() => {
+              const known = [
+                ...fixed.map((h) => ({ name: HOLIDAY_TYPES[h.holidayTypeKey].name, date: h.date as string })),
+                ...MOVABLE_HOLIDAY_KEYS.filter((k) => draft.movable[k]).map((k) => ({ name: HOLIDAY_TYPES[k].name, date: draft.movable[k] })),
+              ]
+              const matter = known.filter((x) => holidayMatters(x.date, draft.year.start, draft.year.end))
+              const noEffect = known.filter((x) => !holidayMatters(x.date, draft.year.start, draft.year.end))
+              if (known.length === 0) return null
+              return (
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Only a holiday that falls on a weekday inside the school year can change the count. This year that is {matter.length} of {known.length}, and each one changes it by exactly one day.
+                  {noEffect.length > 0 && (
+                    <>
+                      {' '}
+                      <strong className="text-foreground">{noEffect.map((x) => x.name).join(', ')}</strong> {noEffect.length === 1 ? 'falls' : 'fall'} on a weekend or outside the school year, so switching {noEffect.length === 1 ? 'it' : 'them'} on or off changes nothing.
+                    </>
+                  )}
+                </p>
+              )
+            })()}
             <div>
               <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-foreground">
                 <Lock className="h-3.5 w-3.5" /> Permanent holidays — added automatically
@@ -533,7 +575,10 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
                   return (
                     <li key={h.holidayTypeKey} className="flex items-center justify-between gap-3 px-3 py-2.5">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">{HOLIDAY_TYPES[h.holidayTypeKey].name}</p>
+                        <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                          {HOLIDAY_TYPES[h.holidayTypeKey].name}
+                          <EffectChip matters={holidayMatters(h.date, draft.year.start, draft.year.end)} />
+                        </p>
                         <p className="text-xs text-muted-foreground">{holidayEffect(h.date, on, draft.year.start, draft.year.end)}</p>
                       </div>
                       <Switch
@@ -559,7 +604,10 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
                   <div key={k} className="space-y-2 rounded-lg border border-border p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-medium text-foreground">{HOLIDAY_TYPES[k].name}</p>
+                        <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                          {HOLIDAY_TYPES[k].name}
+                          {on && value && <EffectChip matters={holidayMatters(value, draft.year.start, draft.year.end)} />}
+                        </p>
                         <p className="text-xs text-muted-foreground">{HOLIDAY_HINT[k]}</p>
                       </div>
                       <Switch
