@@ -21,6 +21,7 @@ import {
   formatShortEthiopian,
   formatShortWithWeekday,
   friendlyLines,
+  holidayImpact,
   indexHolidaysByDate,
   isWeekend,
   isoDate,
@@ -168,18 +169,23 @@ function RangeFields({
  *  looks like it did nothing when the honest answer is "nothing changes". */
 function holidayEffect(date: string, closes: boolean, yearStart: string, yearEnd: string): string {
   if (!date) return closes ? '' : 'School teaches this day.'
-  const d = isoDate(date)
-  const day = formatShortWithWeekday(d)
-  if (date < yearStart) return closes ? `${day}. Before the school year starts, so it has no effect either way.` : `${day}. School teaches this day (it is before the year starts, so nothing changes).`
-  if (date > yearEnd) return closes ? `${day}. After the school year ends, so it has no effect.` : `${day}. School teaches this day (after the year ends, so nothing changes).`
-  if (isWeekend(d)) return closes ? `${day}. Falls on a weekend, so no school day is lost.` : `${day}. School teaches this day, but it is a weekend, so nothing changes.`
-  return closes ? `${day}. No school this day: one learning day less.` : `${day}. School teaches this day: counted as a learning day.`
+  const day = formatShortWithWeekday(isoDate(date))
+  switch (holidayImpact(date, yearStart, yearEnd)) {
+    case 'BEFORE_YEAR':
+      return closes ? `${day}. Before the school year starts, so it has no effect either way.` : `${day}. School teaches this day (it is before the year starts, so nothing changes).`
+    case 'AFTER_YEAR':
+      return closes ? `${day}. After the school year ends, so it has no effect.` : `${day}. School teaches this day (after the year ends, so nothing changes).`
+    case 'WEEKEND':
+      return closes ? `${day}. Falls on a weekend, so no school day is lost.` : `${day}. School teaches this day, but it is a weekend, so nothing changes.`
+    default:
+      return closes ? `${day}. No school this day: one learning day less.` : `${day}. School teaches this day: counted as a learning day.`
+  }
 }
 
 /** A holiday only changes the learning-day count if its date is a weekday
- *  inside the school year. */
+ *  inside the school year — decided from the date, never from the name. */
 function holidayMatters(date: string, yearStart: string, yearEnd: string): boolean {
-  return !!date && date >= yearStart && date <= yearEnd && !isWeekend(isoDate(date))
+  return !!date && holidayImpact(date, yearStart, yearEnd) === 'SCHOOL_DAY'
 }
 
 function EffectChip({ matters }: { matters: boolean }) {
