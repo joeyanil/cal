@@ -160,7 +160,7 @@ export function EthiopianDateField({ label, name, ethiopianYear, defaultValue, o
           ))}
         </select>
       </div>
-      <span className="text-[11px] text-muted-foreground/80">{gregorian ? `= ${gregorian} G.C.` : 'Select month & day'}</span>
+      <span className="text-[11px] text-muted-foreground/80">{gregorian ? `${new Date(`${gregorian}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })} (G.C.)` : 'Select month & day'}</span>
       <input type="hidden" name={name} value={gregorian} />
     </div>
   )

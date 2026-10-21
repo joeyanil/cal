@@ -33,7 +33,7 @@ const STEPS: Record<
   },
 }
 
-export function YearStatusCard({ yearId, status }: { yearId: string; status: AcademicYearStatus }) {
+export function YearStatusCard({ yearId, status, blockers = 0 }: { yearId: string; status: AcademicYearStatus; blockers?: number }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -82,12 +82,17 @@ export function YearStatusCard({ yearId, status }: { yearId: string; status: Aca
     <Panel title="Year status">
       <div className="space-y-3">
         <div>
-          <p className="text-sm font-medium text-foreground">{step.heading}</p>
+          <p className="text-sm font-semibold text-foreground">{step.heading}</p>
           <p className="text-sm text-muted-foreground">{step.body}</p>
         </div>
         {error && (
           <p role="alert" className="text-sm font-medium text-error-text">
             {error}
+          </p>
+        )}
+        {status === 'PREPARING' && blockers > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {blockers} {blockers === 1 ? 'item still needs' : 'items still need'} attention. They are listed under Validation below. Finish them first, then this button turns on.
           </p>
         )}
         {confirming && step.confirm ? (
@@ -101,7 +106,13 @@ export function YearStatusCard({ yearId, status }: { yearId: string; status: Aca
             </Button>
           </div>
         ) : (
-          <Button type="button" onClick={() => (step.confirm ? setConfirming(true) : void advance())} loading={busy} loadingText="Saving…">
+          <Button
+            type="button"
+            onClick={() => (step.confirm ? setConfirming(true) : void advance())}
+            loading={busy}
+            loadingText="Saving…"
+            disabled={status === 'PREPARING' && blockers > 0}
+          >
             {step.button}
           </Button>
         )}

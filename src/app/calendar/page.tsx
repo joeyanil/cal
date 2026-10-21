@@ -34,19 +34,21 @@ export default async function CalendarDashboardPage() {
           ) : (
             <ul className="divide-y divide-border">
               {years.map((year) => (
-                <li key={year.id} className="flex items-center justify-between py-2.5">
-                  <Link href={`/calendar/${year.id}`} className="text-sm font-medium text-foreground hover:underline">
-                    {year.name}
-                  </Link>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <Link href={`/calendar/${year.id}/setup`} className="font-medium text-primary underline underline-offset-4">
-                      Set up →
+                <li key={year.id} className="py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <Link href={`/calendar/${year.id}`} className="text-base font-semibold text-foreground hover:underline">
+                      {year.name}
                     </Link>
-                    <span className="tabular-dates">
-                      {formatEthiopian(year.startDate)} – {formatEthiopian(year.endDate)}
-                    </span>
-                    {year.isDefaultBoundary && <span>(default boundary)</span>}
                     <LifecycleBadge status={year.status} />
+                  </div>
+                  <p className="tabular-dates mt-0.5 text-xs text-muted-foreground">
+                    {formatEthiopian(year.startDate)} – {formatEthiopian(year.endDate)}
+                    {year.isDefaultBoundary && ' · default dates, not confirmed yet'}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm font-medium text-primary">
+                    <Link href={`/calendar/${year.id}`} className="underline underline-offset-4">Overview</Link>
+                    <Link href={`/calendar/${year.id}/setup`} className="underline underline-offset-4">Set up</Link>
+                    <Link href={`/calendar/${year.id}/year`} className="underline underline-offset-4">View year</Link>
                   </div>
                 </li>
               ))}

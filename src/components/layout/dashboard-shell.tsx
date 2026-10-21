@@ -20,9 +20,9 @@ export function DashboardShell({
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar title={title} groups={groups} chrome={chrome} />
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <Topbar userLabel={userLabel} userSubLabel={userSubLabel} chrome={chrome} />
-        <main className="flex-1 p-4 lg:p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 lg:p-6">{children}</main>
       </div>
     </div>
   )

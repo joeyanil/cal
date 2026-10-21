@@ -277,6 +277,7 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
   const [saved, setSaved] = useState<SetupDraft>(initial)
   const [resetKeys, setResetKeys] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState(false)
+  const [boundaryConfirmed, setBoundaryConfirmed] = useState(!year.isDefaultBoundary)
   const [error, setError] = useState<string | null>(null)
 
   const review = useMemo(() => reviewDraft(draft, year, fixed), [draft, year, fixed])
@@ -319,7 +320,7 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
           ? 'done'
           : 'todo'
     }
-    out.review = review.errors.length === 0 && review.missing.length === 0 ? 'done' : out.review
+    out.review = review.errors.length > 0 ? 'error' : review.missing.length === 0 ? 'done' : 'todo'
     return out
   }, [review, draft])
 
@@ -330,12 +331,13 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
 
   async function saveStep(key: StepKey) {
     const y = year.id
-    if (key === 'year' && (JSON.stringify(draft.year) !== JSON.stringify(saved.year) || draft.ministryTarget !== saved.ministryTarget)) {
+    if (key === 'year' && (!boundaryConfirmed || JSON.stringify(draft.year) !== JSON.stringify(saved.year) || draft.ministryTarget !== saved.ministryTarget)) {
       await call(`/api/v1/academic-years/${y}`, 'PATCH', {
         startDate: draft.year.start,
         endDate: draft.year.end,
         ministryTargetDays: draft.ministryTarget ? Number(draft.ministryTarget) : null,
       })
+      setBoundaryConfirmed(true)
     }
     if (key === 'semesters') {
       for (const [order, cur, prev] of [[1, draft.sem1, saved.sem1], [2, draft.sem2, saved.sem2]] as const) {
@@ -687,7 +689,7 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
           <p className="text-sm text-muted-foreground">{meta.why}</p>
         </header>
 
-        {body()}
+        <div key={step}>{body()}</div>
 
         {error && (
           <p role="alert" className="flex items-start gap-2 text-sm font-medium text-error-text">

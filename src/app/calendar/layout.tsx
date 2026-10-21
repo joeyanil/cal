@@ -1,5 +1,7 @@
 import { DashboardShell } from '@/components/layout/dashboard-shell'
+import { redirect } from 'next/navigation'
 import { withAuth } from '@/lib/auth/withAuth'
+import { AppError } from '@/lib/errors/AppError'
 export const dynamic = 'force-dynamic'
 
 const groups = [
@@ -36,6 +38,9 @@ export default async function CalendarLayout({ children }: { children: React.Rea
       </DashboardShell>
     )
 } catch (error) {
+    // Not signed in (or the session ran out): send them to sign in rather
+    // than showing a technical error code.
+    if (error instanceof AppError && error.code === 'UNAUTHENTICATED') redirect('/login')
     console.error('[CalendarLayout] withAuth() failed:', error)
     return <div className="min-h-screen bg-background px-8 py-6">{children}</div>
   }

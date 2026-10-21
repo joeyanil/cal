@@ -143,7 +143,7 @@ export function buildHolidayList(args: {
       if (impact === 'BEFORE_YEAR') rows.push({ key, name, date: occ.date, status: 'OUTSIDE_YEAR', note: 'Falls before the school year starts, so it does not count.' })
       else if (impact === 'AFTER_YEAR') rows.push({ key, name, date: occ.date, status: 'OUTSIDE_YEAR', note: 'Falls after the school year ends, so it does not count.' })
       else if (impact === 'WEEKEND') rows.push({ key, name, date: occ.date, status: 'WEEKEND', note: 'Falls on a weekend, so no school day is lost.' })
-      else rows.push({ key, name, date: occ.date, status: 'COUNTED', note: 'No school this day. It is one of the days without lessons.' })
+      else rows.push({ key, name, date: occ.date, status: 'COUNTED', note: 'No school this day.' })
     }
   }
   return rows
