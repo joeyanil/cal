@@ -38,7 +38,7 @@ export function CreateYearForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-2">
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2">
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         Ethiopian year
         <input
@@ -54,7 +54,7 @@ export function CreateYearForm() {
         Create year
       </Button>
       {error && (
-        <span className="text-xs text-error-text">
+        <span className="w-full text-sm text-error-text">
           {error}{' '}
           {existingId && (
             <Link href={`/calendar/${existingId}/setup`} className="font-medium text-primary underline underline-offset-4">

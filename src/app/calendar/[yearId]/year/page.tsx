@@ -8,6 +8,7 @@ import { buildHolidayList } from '@/lib/calendar'
 import { YearView } from '@/components/calendar/YearView'
 import { ErrorState } from '@/components/calendar/ErrorState'
 import { Panel } from '@/components/ui/panel'
+import { AppError } from '@/lib/errors/AppError'
 export const dynamic = 'force-dynamic'
 
 interface Props {
@@ -43,18 +44,25 @@ export default async function YearViewPage({ params }: Props) {
       </div>
     )
   } catch (error) {
-    return (
-      <div className="space-y-4">
-        <Panel title="No timeline to show yet">
-          <p className="text-sm text-muted-foreground">
-            Build and publish the timeline from the year overview first.
-          </p>
-          <Link href={`/calendar/${yearId}`} className="mt-2 inline-block text-sm text-primary underline underline-offset-4">
-            ← Back to year overview
-          </Link>
-        </Panel>
-        <ErrorState error={error} />
-      </div>
-    )
+    if (error instanceof AppError && error.code === 'CALENDAR_NO_CURRENT_TIMELINE') {
+      return (
+        <div className="space-y-4">
+          <Panel title="No calendar built for this year yet">
+            <p className="text-sm text-muted-foreground">
+              Finish the setup, then tap <strong className="text-foreground">Save &amp; build calendar</strong> on the last step. The full-year view appears here once a calendar has been built.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm font-medium text-primary">
+              <Link href={`/calendar/${yearId}/setup`} className="underline underline-offset-4">
+                Go to setup →
+              </Link>
+              <Link href={`/calendar/${yearId}`} className="underline underline-offset-4">
+                ← Back to year overview
+              </Link>
+            </div>
+          </Panel>
+        </div>
+      )
+    }
+    return <ErrorState error={error} />
   }
 }

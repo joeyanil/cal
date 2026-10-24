@@ -120,7 +120,7 @@ function matches(entry: DailyTimelineEntry, focus: Focus): boolean {
 
 function Swatch({ kind, className }: { kind: DayKind; className?: string }) {
   const meta = KIND_META[kind]
-  return <span aria-hidden className={clsx('inline-block h-6 w-6 shrink-0 rounded-md', meta.cell, className)} style={meta.style} />
+  return <span aria-hidden className={clsx('inline-block h-6 w-6 shrink-0 rounded-md border border-black/10', meta.cell, className)} style={meta.style} />
 }
 
 function StatCard({ value, label, tone }: { value: number; label: string; tone?: string }) {

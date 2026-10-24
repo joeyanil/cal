@@ -132,7 +132,7 @@ export function validateCalendarConfiguration(input: ValidationInput): Validatio
       issues.push({
         severity: 'MISSING',
         code: 'CALENDAR_HOLIDAY_OCCURRENCE_MISSING',
-        message: `No occurrence recorded yet for ${key}.`,
+        message: `The date for ${key} has not been entered yet${(MOVABLE_HOLIDAY_KEYS as readonly string[]).includes(key) ? ' (or switch it off if the school teaches on that day)' : ''}.`,
         ref: { kind: 'HOLIDAY_OCCURRENCE', holidayTypeKey: key },
       })
     }

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { withAuth } from '@/lib/auth/withAuth'
 import { createServerClient } from '@/lib/supabase/server'
 import { getAcademicYear } from '@/lib/services/academicYear.service'
+import { getCurrentTimeline } from '@/lib/services/calendarTimeline.service'
 import { runCalendarValidation } from '@/lib/services/calendarValidation.service'
 import { Panel } from '@/components/ui/panel'
 import { LifecycleBadge } from '@/components/ui/badge'
@@ -21,13 +22,18 @@ export default async function AcademicYearPage({ params }: Props) {
   try {
     const ctx = await withAuth()
     const supabase = await createServerClient()
-    const [year, issues] = await Promise.all([
+    const [year, issues, published] = await Promise.all([
       getAcademicYear(supabase, ctx, yearId),
       runCalendarValidation(supabase, ctx, yearId),
+      getCurrentTimeline(supabase, ctx, yearId).catch(() => []),
     ])
+    const publishedLearning = published.filter((d) => d.teachingDay).length
 
     return (
       <div className="mx-auto max-w-3xl space-y-6">
+        <Link href="/calendar" className="inline-block text-sm text-primary underline underline-offset-4">
+          ← All academic years
+        </Link>
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">{year.name}</h1>
@@ -63,13 +69,27 @@ export default async function AcademicYearPage({ params }: Props) {
               Resolve the errors below before building the timeline.
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              The timeline reflects every fact entered so far. Rebuild it any time a fact changes.
-            </p>
+            <div className="space-y-1 text-sm text-muted-foreground">
+              <p>
+                {published.length > 0 ? (
+                  <>
+                    Published: <strong className="text-foreground">{published.length} calendar days</strong>, of which{' '}
+                    <strong className="text-foreground">{publishedLearning} are learning days</strong>.
+                  </>
+                ) : (
+                  'No timeline has been published yet.'
+                )}
+              </p>
+              <p>The timeline reflects every fact entered so far. Rebuild it any time a fact changes.</p>
+            </div>
           )}
         </Panel>
 
-        <YearStatusCard yearId={yearId} status={year.status} />
+        <YearStatusCard
+          yearId={yearId}
+          status={year.status}
+          blockers={issues.filter((i) => i.severity === 'ERROR' || i.severity === 'MISSING').length}
+        />
 
         <ValidationPanel issues={issues} />
       </div>
