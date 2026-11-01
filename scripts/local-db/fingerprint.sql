@@ -1,6 +1,7 @@
 -- Fingerprint of everything the calendar engine puts in the "public" schema.
 -- Run it on a database and compare the result with docs/DB_FINGERPRINT.md.
--- It only reads. For each kind of object it gives: n = how many, names = a code
+-- It only reads. (Supabase's own helper function rls_auto_enable() is ignored: it is
+-- added by Supabase, not by this repository.) For each kind of object it gives: n = how many, names = a code
 -- for the list of names, defs = a code for the exact definitions. If "names"
 -- matches but "defs" differs, an object has the same name but different content.
 with objs as (
@@ -12,7 +13,7 @@ with objs as (
     from information_schema.columns where table_schema = 'public'
   union all
   select 'functions', p.proname||'('||pg_get_function_identity_arguments(p.oid)||')', pg_get_functiondef(p.oid)
-    from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prokind = 'f'
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prokind = 'f' and p.proname <> 'rls_auto_enable'
   union all
   select 'triggers', c.relname||'.'||t.tgname, pg_get_triggerdef(t.oid)
     from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace

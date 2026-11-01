@@ -17,7 +17,7 @@
 SET check_function_bodies = false; -- functions are created before the tables they mention
 
 
-\restrict 0p3mEJZZGYiQaaBng3uXyZyw8z6Cvh6s7pzLm9Y7gs2nKhU4ki5xsyWaaOWGYOH
+\restrict YGGgAdgCh2aWwaq8BqQg6oqkhxoFGqvLoKkxk8LbkP5xmWZA54Gd485dbXcpAUW
 
 CREATE TYPE public.academic_year_status AS ENUM (
     'PREPARING',
@@ -376,6 +376,7 @@ $$;
 
 CREATE FUNCTION public.fn_load_calendar_config_snapshot(p_academic_year_id uuid) RETURNS jsonb
     LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 DECLARE
     v_rev_before INT;
@@ -757,6 +758,7 @@ $$;
 
 CREATE FUNCTION public.fn_validate_exam_placement() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 DECLARE
     d DATE;
@@ -808,6 +810,7 @@ $$;
 
 CREATE FUNCTION public.fn_validate_fact_ref(p_kind public.calendar_fact_kind, p_semester_order smallint, p_holiday_key public.holiday_type_key, p_exam_key public.exam_type_key, p_label text) RETURNS void
     LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 BEGIN
     CASE p_kind
@@ -837,6 +840,7 @@ $$;
 
 CREATE FUNCTION public.fn_validate_holiday_occurrence() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 DECLARE
     v_movable BOOLEAN;
@@ -853,6 +857,7 @@ $$;
 
 CREATE FUNCTION public.fn_validate_semester_ordering() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 DECLARE
     v_other semesters;
@@ -1505,11 +1510,11 @@ GRANT ALL ON FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uui
 GRANT ALL ON FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date, p_reason text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date, p_reason text) TO service_role;
 
-GRANT ALL ON FUNCTION public.fn_audit_log() TO anon;
+REVOKE ALL ON FUNCTION public.fn_audit_log() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_audit_log() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_audit_log() TO service_role;
 
-GRANT ALL ON FUNCTION public.fn_bump_calendar_config_revision(p_academic_year_id uuid) TO anon;
+REVOKE ALL ON FUNCTION public.fn_bump_calendar_config_revision(p_academic_year_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_bump_calendar_config_revision(p_academic_year_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_bump_calendar_config_revision(p_academic_year_id uuid) TO service_role;
 
@@ -1545,7 +1550,7 @@ GRANT ALL ON FUNCTION public.fn_create_default_semesters() TO anon;
 GRANT ALL ON FUNCTION public.fn_create_default_semesters() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_create_default_semesters() TO service_role;
 
-GRANT ALL ON FUNCTION public.fn_load_calendar_config_snapshot(p_academic_year_id uuid) TO anon;
+REVOKE ALL ON FUNCTION public.fn_load_calendar_config_snapshot(p_academic_year_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_load_calendar_config_snapshot(p_academic_year_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_load_calendar_config_snapshot(p_academic_year_id uuid) TO service_role;
 
@@ -1609,7 +1614,7 @@ GRANT ALL ON FUNCTION public.fn_validate_exam_placement() TO anon;
 GRANT ALL ON FUNCTION public.fn_validate_exam_placement() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_validate_exam_placement() TO service_role;
 
-GRANT ALL ON FUNCTION public.fn_validate_fact_ref(p_kind public.calendar_fact_kind, p_semester_order smallint, p_holiday_key public.holiday_type_key, p_exam_key public.exam_type_key, p_label text) TO anon;
+REVOKE ALL ON FUNCTION public.fn_validate_fact_ref(p_kind public.calendar_fact_kind, p_semester_order smallint, p_holiday_key public.holiday_type_key, p_exam_key public.exam_type_key, p_label text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_validate_fact_ref(p_kind public.calendar_fact_kind, p_semester_order smallint, p_holiday_key public.holiday_type_key, p_exam_key public.exam_type_key, p_label text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_validate_fact_ref(p_kind public.calendar_fact_kind, p_semester_order smallint, p_holiday_key public.holiday_type_key, p_exam_key public.exam_type_key, p_label text) TO service_role;
 
@@ -1702,14 +1707,14 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES 
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO authenticated;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO service_role;
 
-\unrestrict 0p3mEJZZGYiQaaBng3uXyZyw8z6Cvh6s7pzLm9Y7gs2nKhU4ki5xsyWaaOWGYOH
+\unrestrict YGGgAdgCh2aWwaq8BqQg6oqkhxoFGqvLoKkxk8LbkP5xmWZA54Gd485dbXcpAUW
 
 
 -- ---------------------------------------------------------------------------
 -- Built-in catalog rows
 -- ---------------------------------------------------------------------------
 
-\restrict zGfc2vjyP5gn4mgbMqC6g0EXs4dh9WdEMDjXoMFgs0aKybaYpba1g8JMLpoFeH5
+\restrict Fl8E12lFJCXEN7JnmcafWU6njubYcz1uXHn2cajwbnzlxFachNiZe6Kfy64i3TU
 
 INSERT INTO public.exam_types (key, name, semester_order, closes_school, grade_scope) VALUES ('S1_REGIONAL_MODEL', 'Semester 1 Regional Model Exam', 1, true, 'ALL');
 INSERT INTO public.exam_types (key, name, semester_order, closes_school, grade_scope) VALUES ('S1_FINAL', 'Semester 1 Final Exam', 1, true, 'ALL');
@@ -1728,23 +1733,23 @@ INSERT INTO public.holiday_types (key, name, movable, fixed_month, fixed_day) VA
 INSERT INTO public.holiday_types (key, name, movable, fixed_month, fixed_day) VALUES ('EID_ADHA', 'Eid al-Adha (Arefa)', true, NULL, NULL);
 INSERT INTO public.holiday_types (key, name, movable, fixed_month, fixed_day) VALUES ('DERG_DOWNFALL', 'Downfall of the Derg', false, 9, 20);
 
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('fe9e8d5e-542f-4f21-bcea-7a5ccfa7d1dd', 'calendar', 'view', NULL, '2026-10-21 21:32:29.073429+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('285ff0ab-4aae-49c0-8808-2345108c1b4e', 'calendar', 'manage', NULL, '2026-10-21 21:32:29.073429+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('7e541ac2-20d3-4fc2-b029-df085d9af7b1', 'calendar', 'manage_holidays', NULL, '2026-10-21 21:32:29.073429+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('9231fa8a-3328-47ea-9f35-84006cc95a55', 'calendar', 'manage_exams', NULL, '2026-10-21 21:32:29.073429+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('9071a5c5-b9f6-4413-a9aa-333962c164ca', 'calendar', 'manage_dependencies', NULL, '2026-10-21 21:32:29.073429+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('4cc3c1c8-45cc-4a3a-b58e-232cc5bba05a', 'calendar', 'build_timeline', NULL, '2026-10-21 21:32:29.073429+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('d43982bc-3d99-4cbb-af60-d00281e71ed3', 'calendar', 'correct_history', NULL, '2026-10-21 21:32:29.073429+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('b0dea713-b42e-41b2-b4af-c6a6d8e97014', 'calendar', 'view', NULL, '2026-10-27 22:50:40.76354+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('2f11e165-1f05-4858-a5ba-313e25b3b106', 'calendar', 'manage', NULL, '2026-10-27 22:50:40.76354+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('89de8003-6383-4841-84f4-fdd55909358c', 'calendar', 'manage_holidays', NULL, '2026-10-27 22:50:40.76354+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('9aacc8e4-8608-4e9c-9781-2bca40510a7f', 'calendar', 'manage_exams', NULL, '2026-10-27 22:50:40.76354+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('80eaaf89-c149-4ea5-a715-a81924af839b', 'calendar', 'manage_dependencies', NULL, '2026-10-27 22:50:40.76354+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('c6304643-e9d2-4514-8db8-84da15fecab8', 'calendar', 'build_timeline', NULL, '2026-10-27 22:50:40.76354+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('a2d108d4-bb61-44a2-9177-8ce43a63c50b', 'calendar', 'correct_history', NULL, '2026-10-27 22:50:40.76354+00');
 
-INSERT INTO public.roles (id, name, description, created_at, updated_at) VALUES ('4da1aed6-0907-48e8-91aa-5797fbe39e0b', 'Admin', 'Standalone-mode bootstrap role: every calendar.* permission.', '2026-10-21 21:32:29.681527+00', '2026-10-21 21:32:29.681527+00');
+INSERT INTO public.roles (id, name, description, created_at, updated_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', 'Admin', 'Standalone-mode bootstrap role: every calendar.* permission.', '2026-10-27 22:50:41.358088+00', '2026-10-27 22:50:41.358088+00');
 
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('4da1aed6-0907-48e8-91aa-5797fbe39e0b', 'fe9e8d5e-542f-4f21-bcea-7a5ccfa7d1dd', '2026-10-21 21:32:29.681527+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('4da1aed6-0907-48e8-91aa-5797fbe39e0b', '285ff0ab-4aae-49c0-8808-2345108c1b4e', '2026-10-21 21:32:29.681527+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('4da1aed6-0907-48e8-91aa-5797fbe39e0b', '7e541ac2-20d3-4fc2-b029-df085d9af7b1', '2026-10-21 21:32:29.681527+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('4da1aed6-0907-48e8-91aa-5797fbe39e0b', '9231fa8a-3328-47ea-9f35-84006cc95a55', '2026-10-21 21:32:29.681527+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('4da1aed6-0907-48e8-91aa-5797fbe39e0b', '9071a5c5-b9f6-4413-a9aa-333962c164ca', '2026-10-21 21:32:29.681527+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('4da1aed6-0907-48e8-91aa-5797fbe39e0b', '4cc3c1c8-45cc-4a3a-b58e-232cc5bba05a', '2026-10-21 21:32:29.681527+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('4da1aed6-0907-48e8-91aa-5797fbe39e0b', 'd43982bc-3d99-4cbb-af60-d00281e71ed3', '2026-10-21 21:32:29.681527+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', 'b0dea713-b42e-41b2-b4af-c6a6d8e97014', '2026-10-27 22:50:41.358088+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', '2f11e165-1f05-4858-a5ba-313e25b3b106', '2026-10-27 22:50:41.358088+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', '89de8003-6383-4841-84f4-fdd55909358c', '2026-10-27 22:50:41.358088+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', '9aacc8e4-8608-4e9c-9781-2bca40510a7f', '2026-10-27 22:50:41.358088+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', '80eaaf89-c149-4ea5-a715-a81924af839b', '2026-10-27 22:50:41.358088+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', 'c6304643-e9d2-4514-8db8-84da15fecab8', '2026-10-27 22:50:41.358088+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', 'a2d108d4-bb61-44a2-9177-8ce43a63c50b', '2026-10-27 22:50:41.358088+00');
 
-\unrestrict zGfc2vjyP5gn4mgbMqC6g0EXs4dh9WdEMDjXoMFgs0aKybaYpba1g8JMLpoFeH5
+\unrestrict Fl8E12lFJCXEN7JnmcafWU6njubYcz1uXHn2cajwbnzlxFachNiZe6Kfy64i3TU
 
