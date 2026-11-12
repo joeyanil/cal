@@ -11,11 +11,12 @@ Everything the calendar engine needs in the database is in this repository. Noth
 | 2 | `migrations/0020_calendar_exam_holiday_week.sql` | Database-level "no exam in a holiday week" rule. |
 | 3 | `migrations/0021a_holiday_derg_enum.sql` | **Run this one alone, by itself.** Adds the Ginbot 20 holiday type. PostgreSQL cannot use a new enum value in the same run that creates it. |
 | 4 | `migrations/0021b_holiday_switches_and_ministry_reminder.sql` | Run after 0021a. Holiday on/off switches (a moving holiday can have no date), and the optional Ministry total. |
-| 5 | `migrations/0022_security_hardening.sql` | Run last. Safe to run more than once. |
+| 5 | `migrations/0022_security_hardening.sql` | Safe to run more than once. |
+| 6 | `migrations/0023_calendar_corrections_simplified.sql` | Run last. Corrections in a closed year no longer ask for a reason or keep a record; the old record table is removed. |
 
 Rules that keep the database trustworthy:
 - Change a live database **only** by adding a new numbered file here and running it. Never edit the SQL editor directly without also adding the file.
-- Never edit a migration that has already been run on a live database. Add the next number instead (`0022_...`).
+- Never edit a migration that has already been run on a live database. Add the next number instead (`0024_...`).
 - A migration that adds an enum value goes in its own file (like 0021a).
 
 ## 2. What each migration does
@@ -31,7 +32,7 @@ Rules that keep the database trustworthy:
 | 0007 | Dependency model (one date derived from another) |
 | 0008 | Timeline builds and the daily timeline |
 | 0009 | Validation runs |
-| 0010 | Formal corrections (audit trail) |
+| 0010 | Formal corrections table (removed again in 0023) |
 | 0011 | Reminders |
 | 0012 | Permission catalog (`calendar.*` permissions) |
 | 0013 | RPC functions (load configuration snapshot, publish timeline, and others) |
@@ -44,6 +45,7 @@ Rules that keep the database trustworthy:
 | 0020 | Exam may not be in a week that has a school-closing holiday |
 | 0021a | Adds the Ginbot 20 (Downfall of the Derg) holiday type |
 | 0021b | Ginbot 20 catalog row, holiday date optional (school teaches), `ministry_target_days` column and its grant |
+| 0023 | Corrections in a closed year just update the date: no reason asked, no record kept; the `calendar_corrections` table is removed |
 | 0022 | Security hardening: fixed search path on five functions; four internal functions closed to logged-out visitors; Supabase's `rls_auto_enable()` closed to the public API (if present) |
 
 ## 3. Checking that a live database matches this repository
@@ -64,4 +66,4 @@ The calendar engine expects the host system to provide:
 
 Migration 0012 registers these permissions: `calendar.view`, `calendar.manage`, `calendar.manage_exams`, `calendar.manage_holidays`, `calendar.build_timeline`, `calendar.manage_dependencies`, `calendar.correct_history`. Grant them to the right roles in the main system.
 
-Replace `standalone/0000_standalone_bootstrap.sql` with the main system's own versions of the objects above, then run migrations 0001 to 0022 unchanged. Test the combined database with `scripts/local-db/setup.sh` and the tests in `tests-integration/` before touching production.
+Replace `standalone/0000_standalone_bootstrap.sql` with the main system's own versions of the objects above, then run migrations 0001 to 0023 unchanged. Test the combined database with `scripts/local-db/setup.sh` and the tests in `tests-integration/` before touching production.

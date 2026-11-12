@@ -15,7 +15,7 @@ For one Ethiopian school year at a time (2019 E.C. is the reference year):
 - **Daily timeline**: every calendar day gets exactly one type (learning day, exam day, holiday, semester break, student return, last day of year, weekend), built deterministically and verified after building.
 - **Counts**: learning days, exam days, days without lessons, per semester and per month. Optional "Ministry total" reminder for comparison only.
 - **Validation** with four levels (Missing, Error, Warning, Information); a year cannot become Ready with missing items or errors.
-- **API only (no screen yet)**: dependency rules (one date derived from another), formal corrections to a Closed year with audit trail. **Engine logic only (no screen, route or scheduled job yet)**: reminders (the `calendar_reminders` table exists) and year-to-year rollover.
+- **API only (no screen yet)**: dependency rules (one date derived from another), corrections to a Closed year (main admin only; the date is simply updated, no reason, no record kept - owner decision). **Engine logic only (no screen, route or scheduled job yet)**: reminders (the `calendar_reminders` table exists) and year-to-year rollover.
 
 ## 2. Business rules decided during the build
 
@@ -53,7 +53,7 @@ These came from the Ministry's 2019 E.C. plan and from decisions made with the p
 ## 5. Integration checklist
 
 1. **Database contract.** Read `supabase/README.md` section 4. The main system must provide `users`, `has_permission(text)`, `fn_update_timestamp()`, `fn_audit_log()` and `audit_logs`. Replace `supabase/standalone/0000_standalone_bootstrap.sql` with the main system's versions.
-2. **Run the SQL** in the order given in `supabase/README.md`: migrations 0001 to 0022, with **0021a run on its own**. Never edit a migration that has run; add the next number.
+2. **Run the SQL** in the order given in `supabase/README.md`: migrations 0001 to 0023, with **0021a run on its own**. Never edit a migration that has run; add the next number.
 3. **Permissions.** Grant the seven `calendar.*` permissions (`view`, `manage`, `manage_exams`, `manage_holidays`, `build_timeline`, `manage_dependencies`, `correct_history`) to the right roles.
 4. **Auth.** Pages redirect signed-out visitors to `/login`; change `src/app/calendar/layout.tsx` if the main system uses another path. The layout uses a stand-in shell (`src/components/layout/`); replace it with the main system's shell.
 5. **Mount** the `/calendar` pages and `/api/v1` routes in the main app (or keep this app as a sub-application).

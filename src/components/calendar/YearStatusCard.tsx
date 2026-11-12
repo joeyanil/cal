@@ -27,7 +27,7 @@ const STEPS: Record<
   ACTIVE: {
     next: 'CLOSED',
     heading: 'Active — this is the school year in use',
-    body: 'When the year is over you can close it. A closed year is locked, and any later change needs a formal correction.',
+    body: 'When the year is over you can close it. A closed year is locked, and any later change can only be made by the main admin.',
     button: 'Close this year',
     confirm: 'Close this year? It will be locked and this cannot be undone.',
   },
@@ -42,7 +42,7 @@ export function YearStatusCard({ yearId, status, blockers = 0 }: { yearId: strin
   if (status === 'CLOSED') {
     return (
       <Panel title="Year status">
-        <p className="text-sm text-muted-foreground">This year is closed and locked. Any change now needs a formal correction.</p>
+        <p className="text-sm text-muted-foreground">This year is closed and locked. Only the main admin can change a date now.</p>
       </Panel>
     )
   }

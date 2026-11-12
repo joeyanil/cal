@@ -1,6 +1,6 @@
 -- ============================================================================
 -- K2 Calendar Engine - complete picture of the database after migrations
--- 0001 .. 0021b (and the standalone bootstrap) have been applied.
+-- 0001 .. 0023 (and the standalone bootstrap) have been applied.
 --
 -- WHAT THIS IS: a generated, single-file record of the final structure
 -- (tables, columns, constraints, indexes, functions, triggers, row-level
@@ -17,7 +17,7 @@
 SET check_function_bodies = false; -- functions are created before the tables they mention
 
 
-\restrict YGGgAdgCh2aWwaq8BqQg6oqkhxoFGqvLoKkxk8LbkP5xmWZA54Gd485dbXcpAUW
+\restrict Zcn4NEQDk67DSX7q4xanLymo0gHpohY4sdCbTuEFdaMUAJMgWiIDVOyGdYxo4j2
 
 CREATE TYPE public.academic_year_status AS ENUM (
     'PREPARING',
@@ -94,38 +94,18 @@ CREATE TYPE public.timeline_build_status AS ENUM (
     'SUPERSEDED'
 );
 
-CREATE TABLE public.calendar_corrections (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    academic_year_id uuid NOT NULL,
-    fact_kind public.calendar_fact_kind NOT NULL,
-    fact_semester_order smallint,
-    fact_holiday_type_key public.holiday_type_key,
-    fact_exam_type_key public.exam_type_key,
-    original_value date NOT NULL,
-    corrected_value date NOT NULL,
-    reason text NOT NULL,
-    performed_by uuid NOT NULL,
-    performed_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT calendar_corrections_fact_semester_order_check CHECK ((fact_semester_order = ANY (ARRAY[1, 2]))),
-    CONSTRAINT calendar_corrections_reason_check CHECK ((length(btrim(reason)) > 0))
-);
-
-CREATE FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date, p_reason text) RETURNS public.calendar_corrections
+CREATE FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date) RETURNS date
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public', 'pg_temp'
     AS $$
 DECLARE
     v_year academic_years;
     v_semester semesters;
-    v_original DATE;
-    v_correction calendar_corrections;
-    v_actor UUID;
+    v_found BOOLEAN := TRUE;
 BEGIN
     IF NOT has_permission('calendar.correct_history') THEN
         RAISE EXCEPTION 'permission denied for calendar.correct_history' USING ERRCODE = '42501';
     END IF;
-
-    SELECT id INTO v_actor FROM users WHERE supabase_uid = auth.uid();
 
     SELECT * INTO v_year FROM academic_years WHERE id = p_academic_year_id FOR UPDATE;
     IF NOT FOUND THEN
@@ -150,53 +130,38 @@ BEGIN
 
     CASE p_fact_kind
         WHEN 'SEMESTER_START' THEN
-            v_original := v_semester.start_date;
             UPDATE semesters SET start_date = p_corrected_value WHERE id = v_semester.id;
         WHEN 'SEMESTER_END' THEN
-            v_original := v_semester.end_date;
             UPDATE semesters SET end_date = p_corrected_value WHERE id = v_semester.id;
         WHEN 'STUDENT_RETURN' THEN
-            SELECT date INTO v_original FROM student_return_days WHERE academic_year_id = p_academic_year_id;
             UPDATE student_return_days SET date = p_corrected_value WHERE academic_year_id = p_academic_year_id;
+            v_found := FOUND;
         WHEN 'HOLIDAY_OCCURRENCE' THEN
-            SELECT date INTO v_original FROM holiday_occurrences
-             WHERE academic_year_id = p_academic_year_id AND holiday_type_key = p_fact_holiday_type_key;
             UPDATE holiday_occurrences SET date = p_corrected_value
              WHERE academic_year_id = p_academic_year_id AND holiday_type_key = p_fact_holiday_type_key;
+            v_found := FOUND;
         WHEN 'EXAM_START' THEN
-            SELECT start_date INTO v_original FROM exam_instances
-             WHERE academic_year_id = p_academic_year_id AND exam_type_key = p_fact_exam_type_key;
             UPDATE exam_instances SET start_date = p_corrected_value
              WHERE academic_year_id = p_academic_year_id AND exam_type_key = p_fact_exam_type_key;
+            v_found := FOUND;
         WHEN 'EXAM_END' THEN
-            SELECT end_date INTO v_original FROM exam_instances
-             WHERE academic_year_id = p_academic_year_id AND exam_type_key = p_fact_exam_type_key;
             UPDATE exam_instances SET end_date = p_corrected_value
              WHERE academic_year_id = p_academic_year_id AND exam_type_key = p_fact_exam_type_key;
+            v_found := FOUND;
         WHEN 'ACADEMIC_YEAR_START' THEN
-            v_original := v_year.start_date;
             UPDATE academic_years SET start_date = p_corrected_value WHERE id = p_academic_year_id;
         WHEN 'ACADEMIC_YEAR_END' THEN
-            v_original := v_year.end_date;
             UPDATE academic_years SET end_date = p_corrected_value WHERE id = p_academic_year_id;
         ELSE
             RAISE EXCEPTION 'Correction not supported for fact kind %', p_fact_kind USING ERRCODE = 'check_violation';
     END CASE;
 
-    IF v_original IS NULL THEN
-        RAISE EXCEPTION 'Could not resolve the original value for %/% — nothing to correct',
-            p_fact_kind, p_academic_year_id USING ERRCODE = 'no_data_found';
+    IF NOT v_found THEN
+        RAISE EXCEPTION 'Nothing to correct for %/% - that date was never entered', p_fact_kind, p_academic_year_id
+            USING ERRCODE = 'no_data_found';
     END IF;
 
-    INSERT INTO calendar_corrections (
-        academic_year_id, fact_kind, fact_semester_order, fact_holiday_type_key, fact_exam_type_key,
-        original_value, corrected_value, reason, performed_by
-    ) VALUES (
-        p_academic_year_id, p_fact_kind, p_fact_semester_order, p_fact_holiday_type_key, p_fact_exam_type_key,
-        v_original, p_corrected_value, p_reason, v_actor
-    ) RETURNING * INTO v_correction;
-
-    RETURN v_correction;
+    RETURN p_corrected_value;
 END;
 $$;
 
@@ -1110,9 +1075,6 @@ ALTER TABLE ONLY public.academic_years
 ALTER TABLE ONLY public.audit_logs
     ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.calendar_corrections
-    ADD CONSTRAINT calendar_corrections_pkey PRIMARY KEY (id);
-
 ALTER TABLE ONLY public.calendar_dependencies
     ADD CONSTRAINT calendar_dependencies_pkey PRIMARY KEY (id);
 
@@ -1201,8 +1163,6 @@ CREATE INDEX idx_audit_logs_created_at ON public.audit_logs USING btree (created
 
 CREATE INDEX idx_audit_logs_resource ON public.audit_logs USING btree (resource_type, resource_id);
 
-CREATE INDEX idx_calendar_corrections_year ON public.calendar_corrections USING btree (academic_year_id, performed_at DESC);
-
 CREATE INDEX idx_calendar_dependencies_anchor ON public.calendar_dependencies USING btree (academic_year_id, anchor_kind, anchor_semester_order, anchor_holiday_type_key, anchor_exam_type_key) WHERE active;
 
 CREATE INDEX idx_calendar_dependencies_year ON public.calendar_dependencies USING btree (academic_year_id) WHERE active;
@@ -1289,12 +1249,6 @@ ALTER TABLE ONLY public.academic_years
 ALTER TABLE ONLY public.audit_logs
     ADD CONSTRAINT audit_logs_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.users(id);
 
-ALTER TABLE ONLY public.calendar_corrections
-    ADD CONSTRAINT calendar_corrections_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.calendar_corrections
-    ADD CONSTRAINT calendar_corrections_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.users(id);
-
 ALTER TABLE ONLY public.calendar_dependencies
     ADD CONSTRAINT calendar_dependencies_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE CASCADE;
 
@@ -1370,10 +1324,6 @@ CREATE POLICY academic_years_select_authenticated ON public.academic_years FOR S
 CREATE POLICY academic_years_update_manage ON public.academic_years FOR UPDATE TO authenticated USING ((public.has_permission('calendar.manage'::text) AND (status <> 'CLOSED'::public.academic_year_status))) WITH CHECK (public.has_permission('calendar.manage'::text));
 
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.calendar_corrections ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY calendar_corrections_select_authenticated ON public.calendar_corrections FOR SELECT TO authenticated USING (public.has_permission('calendar.view'::text));
 
 ALTER TABLE public.calendar_dependencies ENABLE ROW LEVEL SECURITY;
 
@@ -1501,14 +1451,10 @@ GRANT USAGE ON SCHEMA public TO anon;
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT USAGE ON SCHEMA public TO service_role;
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE ON TABLE public.calendar_corrections TO anon;
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE ON TABLE public.calendar_corrections TO authenticated;
-GRANT ALL ON TABLE public.calendar_corrections TO service_role;
-
-REVOKE ALL ON FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date, p_reason text) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date, p_reason text) TO anon;
-GRANT ALL ON FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date, p_reason text) TO authenticated;
-GRANT ALL ON FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date, p_reason text) TO service_role;
+REVOKE ALL ON FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date) TO anon;
+GRANT ALL ON FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_apply_calendar_correction(p_academic_year_id uuid, p_fact_kind public.calendar_fact_kind, p_fact_semester_order smallint, p_fact_holiday_type_key public.holiday_type_key, p_fact_exam_type_key public.exam_type_key, p_corrected_value date) TO service_role;
 
 REVOKE ALL ON FUNCTION public.fn_audit_log() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_audit_log() TO authenticated;
@@ -1707,14 +1653,14 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES 
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO authenticated;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO service_role;
 
-\unrestrict YGGgAdgCh2aWwaq8BqQg6oqkhxoFGqvLoKkxk8LbkP5xmWZA54Gd485dbXcpAUW
+\unrestrict Zcn4NEQDk67DSX7q4xanLymo0gHpohY4sdCbTuEFdaMUAJMgWiIDVOyGdYxo4j2
 
 
 -- ---------------------------------------------------------------------------
 -- Built-in catalog rows
 -- ---------------------------------------------------------------------------
 
-\restrict Fl8E12lFJCXEN7JnmcafWU6njubYcz1uXHn2cajwbnzlxFachNiZe6Kfy64i3TU
+\restrict 2YvnHd2zty9VKUObcfyPx0X8XcOxoKdKJbA3jveXp2ezpWsKvUUUFA79WFS3V2g
 
 INSERT INTO public.exam_types (key, name, semester_order, closes_school, grade_scope) VALUES ('S1_REGIONAL_MODEL', 'Semester 1 Regional Model Exam', 1, true, 'ALL');
 INSERT INTO public.exam_types (key, name, semester_order, closes_school, grade_scope) VALUES ('S1_FINAL', 'Semester 1 Final Exam', 1, true, 'ALL');
@@ -1733,23 +1679,23 @@ INSERT INTO public.holiday_types (key, name, movable, fixed_month, fixed_day) VA
 INSERT INTO public.holiday_types (key, name, movable, fixed_month, fixed_day) VALUES ('EID_ADHA', 'Eid al-Adha (Arefa)', true, NULL, NULL);
 INSERT INTO public.holiday_types (key, name, movable, fixed_month, fixed_day) VALUES ('DERG_DOWNFALL', 'Downfall of the Derg', false, 9, 20);
 
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('b0dea713-b42e-41b2-b4af-c6a6d8e97014', 'calendar', 'view', NULL, '2026-10-27 22:50:40.76354+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('2f11e165-1f05-4858-a5ba-313e25b3b106', 'calendar', 'manage', NULL, '2026-10-27 22:50:40.76354+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('89de8003-6383-4841-84f4-fdd55909358c', 'calendar', 'manage_holidays', NULL, '2026-10-27 22:50:40.76354+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('9aacc8e4-8608-4e9c-9781-2bca40510a7f', 'calendar', 'manage_exams', NULL, '2026-10-27 22:50:40.76354+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('80eaaf89-c149-4ea5-a715-a81924af839b', 'calendar', 'manage_dependencies', NULL, '2026-10-27 22:50:40.76354+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('c6304643-e9d2-4514-8db8-84da15fecab8', 'calendar', 'build_timeline', NULL, '2026-10-27 22:50:40.76354+00');
-INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('a2d108d4-bb61-44a2-9177-8ce43a63c50b', 'calendar', 'correct_history', NULL, '2026-10-27 22:50:40.76354+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('89021a6b-840e-4091-b486-0bc79f2be22c', 'calendar', 'view', NULL, '2026-11-12 00:50:40.850952+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('f28536c8-fef9-4c5b-b4c2-45bf40d1dddc', 'calendar', 'manage', NULL, '2026-11-12 00:50:40.850952+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('79448e82-8c3f-4fff-8972-4f0aee962734', 'calendar', 'manage_holidays', NULL, '2026-11-12 00:50:40.850952+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('75a41537-d715-41b0-9418-4521b659e367', 'calendar', 'manage_exams', NULL, '2026-11-12 00:50:40.850952+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('754dbcfe-cc1f-41da-8454-75669042ef93', 'calendar', 'manage_dependencies', NULL, '2026-11-12 00:50:40.850952+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('34589f24-6779-41f4-8feb-5c9ceba6c819', 'calendar', 'build_timeline', NULL, '2026-11-12 00:50:40.850952+00');
+INSERT INTO public.permissions (id, resource, action, description, created_at) VALUES ('6f63fdf1-ea00-4f26-b10e-7c100cc45789', 'calendar', 'correct_history', NULL, '2026-11-12 00:50:40.850952+00');
 
-INSERT INTO public.roles (id, name, description, created_at, updated_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', 'Admin', 'Standalone-mode bootstrap role: every calendar.* permission.', '2026-10-27 22:50:41.358088+00', '2026-10-27 22:50:41.358088+00');
+INSERT INTO public.roles (id, name, description, created_at, updated_at) VALUES ('06c784ff-9a78-4fc0-a5c1-eb6872af4dc4', 'Admin', 'Standalone-mode bootstrap role: every calendar.* permission.', '2026-11-12 00:50:41.321712+00', '2026-11-12 00:50:41.321712+00');
 
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', 'b0dea713-b42e-41b2-b4af-c6a6d8e97014', '2026-10-27 22:50:41.358088+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', '2f11e165-1f05-4858-a5ba-313e25b3b106', '2026-10-27 22:50:41.358088+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', '89de8003-6383-4841-84f4-fdd55909358c', '2026-10-27 22:50:41.358088+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', '9aacc8e4-8608-4e9c-9781-2bca40510a7f', '2026-10-27 22:50:41.358088+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', '80eaaf89-c149-4ea5-a715-a81924af839b', '2026-10-27 22:50:41.358088+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', 'c6304643-e9d2-4514-8db8-84da15fecab8', '2026-10-27 22:50:41.358088+00');
-INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('276ca27e-0477-460f-a891-1c79da92624e', 'a2d108d4-bb61-44a2-9177-8ce43a63c50b', '2026-10-27 22:50:41.358088+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('06c784ff-9a78-4fc0-a5c1-eb6872af4dc4', '89021a6b-840e-4091-b486-0bc79f2be22c', '2026-11-12 00:50:41.321712+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('06c784ff-9a78-4fc0-a5c1-eb6872af4dc4', 'f28536c8-fef9-4c5b-b4c2-45bf40d1dddc', '2026-11-12 00:50:41.321712+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('06c784ff-9a78-4fc0-a5c1-eb6872af4dc4', '79448e82-8c3f-4fff-8972-4f0aee962734', '2026-11-12 00:50:41.321712+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('06c784ff-9a78-4fc0-a5c1-eb6872af4dc4', '75a41537-d715-41b0-9418-4521b659e367', '2026-11-12 00:50:41.321712+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('06c784ff-9a78-4fc0-a5c1-eb6872af4dc4', '754dbcfe-cc1f-41da-8454-75669042ef93', '2026-11-12 00:50:41.321712+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('06c784ff-9a78-4fc0-a5c1-eb6872af4dc4', '34589f24-6779-41f4-8feb-5c9ceba6c819', '2026-11-12 00:50:41.321712+00');
+INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('06c784ff-9a78-4fc0-a5c1-eb6872af4dc4', '6f63fdf1-ea00-4f26-b10e-7c100cc45789', '2026-11-12 00:50:41.321712+00');
 
-\unrestrict Fl8E12lFJCXEN7JnmcafWU6njubYcz1uXHn2cajwbnzlxFachNiZe6Kfy64i3TU
+\unrestrict 2YvnHd2zty9VKUObcfyPx0X8XcOxoKdKJbA3jveXp2ezpWsKvUUUFA79WFS3V2g
 

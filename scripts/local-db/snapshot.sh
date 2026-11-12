@@ -10,7 +10,7 @@ clean() { grep -vE "^(SET |SELECT pg_catalog.set_config|--|CREATE SCHEMA public;
 cat <<'HEADER'
 -- ============================================================================
 -- K2 Calendar Engine - complete picture of the database after migrations
--- 0001 .. 0021b (and the standalone bootstrap) have been applied.
+-- 0001 .. 0023 (and the standalone bootstrap) have been applied.
 --
 -- WHAT THIS IS: a generated, single-file record of the final structure
 -- (tables, columns, constraints, indexes, functions, triggers, row-level

@@ -270,23 +270,6 @@ export interface Database {
         }
         Update: never
       }
-      calendar_corrections: {
-        Row: {
-          id: string
-          academic_year_id: string
-          fact_kind: CalendarFactKindDb
-          fact_semester_order: 1 | 2 | null
-          fact_holiday_type_key: HolidayTypeKeyDb | null
-          fact_exam_type_key: ExamTypeKeyDb | null
-          original_value: string
-          corrected_value: string
-          reason: string
-          performed_by: string
-          performed_at: string
-        }
-        Insert: never // written only via fn_apply_calendar_correction RPC
-        Update: never
-      }
       calendar_reminders: {
         Row: {
           id: string
@@ -343,9 +326,8 @@ export interface Database {
           p_fact_holiday_type_key: HolidayTypeKeyDb | null
           p_fact_exam_type_key: ExamTypeKeyDb | null
           p_corrected_value: string
-          p_reason: string
         }
-        Returns: Database['public']['Tables']['calendar_corrections']['Row']
+        Returns: string
       }
       has_permission: {
         Args: { p_permission_key: string }

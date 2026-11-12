@@ -21,26 +21,23 @@ export const applyCorrectionSchema = z.object({
   factHolidayTypeKey: z.string().nullable().default(null),
   factExamTypeKey: z.string().nullable().default(null),
   correctedValue: isoDateSchema,
-  reason: z.string().min(1, 'A reason is required for every formal correction.'),
 })
 
 /**
- * The ONLY path that can change a date fact belonging to a CLOSED year or
- * semester (mission §37). Requires `calendar.correct_history` — a
- * genuinely stronger permission than ordinary `calendar.manage` — and
- * writes an immutable correction record via `fn_apply_calendar_correction`
- * (Migration 0013).
+ * The ONLY path that can change a date belonging to a CLOSED year or half of
+ * the year. Requires `calendar.correct_history`, which is meant to be given
+ * to the main admin role only. By the owner's decision the date is simply
+ * updated: no reason is asked for and no correction record is kept.
  *
- * Deliberately does NOT rebuild the timeline itself — call
- * `rebuildAndPublishTimeline` afterward as an explicit next step so the two
- * operations (correcting a fact, republishing a timeline) stay individually
- * inspectable rather than being bundled into one opaque action.
+ * Deliberately does NOT rebuild the timeline itself - call
+ * `rebuildAndPublishTimeline` afterward so the new date reaches the calendar.
+ * Returns the new date.
  */
 export async function applyCalendarCorrection(
   supabase: SupabaseClient<Database>,
   ctx: AuthContext,
   academicYearId: string,
-  input: z.infer<typeof applyCorrectionSchema>,
+  input: z.input<typeof applyCorrectionSchema>,
 ) {
   if (!can(ctx, 'calendar.correct_history')) throw new AppError('FORBIDDEN', 403)
   const parsed = applyCorrectionSchema.parse(input)
@@ -52,7 +49,6 @@ export async function applyCalendarCorrection(
     p_fact_holiday_type_key: parsed.factHolidayTypeKey as never,
     p_fact_exam_type_key: parsed.factExamTypeKey as never,
     p_corrected_value: parsed.correctedValue,
-    p_reason: parsed.reason,
   })
 
   if (error) {
@@ -61,20 +57,5 @@ export async function applyCalendarCorrection(
     }
     throw new AppError('CALENDAR_CORRECTION_FAILED', 500, error.message)
   }
-  return data
-}
-
-export async function listCorrections(
-  supabase: SupabaseClient<Database>,
-  ctx: AuthContext,
-  academicYearId: string,
-) {
-  if (!can(ctx, 'calendar.view')) throw new AppError('FORBIDDEN', 403)
-  const { data, error } = await supabase
-    .from('calendar_corrections')
-    .select()
-    .eq('academic_year_id', academicYearId)
-    .order('performed_at', { ascending: false })
-  if (error) throw new AppError('CALENDAR_LIST_FAILED', 500, error.message)
-  return data ?? []
+  return { correctedValue: data }
 }

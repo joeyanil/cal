@@ -269,7 +269,7 @@ END $$;
 
 SELECT fn_apply_calendar_correction(
     'a0000000-0000-0000-0000-000000000019', 'ACADEMIC_YEAR_END', NULL, NULL, NULL,
-    '2027-07-10', 'Ministry issued a one-week extension after year close.'
+    '2027-07-10'
 );
 
 DO $$ BEGIN
@@ -278,10 +278,10 @@ DO $$ BEGIN
   ELSE
     RAISE EXCEPTION 'TEST 8b FAILED';
   END IF;
-  IF (SELECT count(*) FROM calendar_corrections WHERE academic_year_id = 'a0000000-0000-0000-0000-000000000019') = 1 THEN
-    RAISE NOTICE 'TEST 8c PASSED: correction record was written';
+  IF to_regclass('public.calendar_corrections') IS NULL THEN
+    RAISE NOTICE 'TEST 8c PASSED: no correction record is kept (owner decision)';
   ELSE
-    RAISE EXCEPTION 'TEST 8c FAILED';
+    RAISE EXCEPTION 'TEST 8c FAILED: a correction table still exists';
   END IF;
 END $$;
 
@@ -297,7 +297,7 @@ BEGIN
     BEGIN
         PERFORM fn_apply_calendar_correction(
             'a0000000-0000-0000-0000-000000000019', 'ACADEMIC_YEAR_END', NULL, NULL, NULL,
-            '2027-08-01', 'Unauthorized attempt.'
+            '2027-08-01'
         );
         RAISE EXCEPTION 'TEST 9 FAILED: permission-less user was able to apply a correction';
     EXCEPTION WHEN insufficient_privilege THEN
