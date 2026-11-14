@@ -138,6 +138,16 @@ export const CALENDAR_ERROR_CODES = {
     httpStatus: 422,
     meaning: 'A suggested dependency referenced a fact type that does not exist yet in the new year.',
   },
+
+  // --- Special days and reminders -----------------------------------------------
+  CALENDAR_SPECIAL_DAY_INVALID: {
+    httpStatus: 422,
+    meaning: 'A special day failed its checks (name, dates inside the year, grades, wording). The details list each problem.',
+  },
+  CALENDAR_SPECIAL_DAY_NOT_FOUND: { httpStatus: 404, meaning: 'Special day does not exist.' },
+  CALENDAR_REMINDER_SETTINGS_FAILED: { httpStatus: 500, meaning: 'Reminder settings could not be read or saved.' },
+  CALENDAR_REMINDER_JOB_FORBIDDEN: { httpStatus: 403, meaning: 'The reminder job was called without the correct secret.' },
+  CALENDAR_REMINDER_JOB_FAILED: { httpStatus: 500, meaning: 'The daily reminder job could not finish.' },
 } as const
 
 export type CalendarErrorCode = keyof typeof CALENDAR_ERROR_CODES

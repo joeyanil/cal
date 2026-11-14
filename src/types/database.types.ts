@@ -174,6 +174,57 @@ export interface Database {
         Insert: { id?: string; academic_year_id: string; date: string }
         Update: Partial<Database['public']['Tables']['student_return_days']['Insert']>
       }
+      special_days: {
+        Row: {
+          id: string
+          academic_year_id: string
+          situation: string
+          name: string
+          start_date: string
+          end_date: string
+          students_come: boolean
+          grades: number[] | null
+          custom_message: string | null
+          teacher_audience: 'AFFECTED_GRADES' | 'ALL_TEACHERS'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          academic_year_id: string
+          situation: string
+          name: string
+          start_date: string
+          end_date: string
+          students_come: boolean
+          grades?: number[] | null
+          custom_message?: string | null
+          teacher_audience?: 'AFFECTED_GRADES' | 'ALL_TEACHERS'
+        }
+        Update: Partial<Database['public']['Tables']['special_days']['Insert']>
+      }
+      calendar_reminder_settings: {
+        Row: {
+          group_key: string
+          enabled: boolean
+          send_30: boolean
+          send_15: boolean
+          send_5: boolean
+          updated_at: string
+        }
+        Insert: { group_key: string; enabled?: boolean; send_30?: boolean; send_15?: boolean; send_5?: boolean }
+        Update: Partial<Database['public']['Tables']['calendar_reminder_settings']['Insert']>
+      }
+      calendar_reminder_dispatch: {
+        Row: { dispatch_key: string; academic_year_id: string; group_key: string; sent_on: string; sent_at: string }
+        Insert: { dispatch_key: string; academic_year_id: string; group_key: string; sent_on: string }
+        Update: Partial<Database['public']['Tables']['calendar_reminder_dispatch']['Insert']>
+      }
+      calendar_reminder_known_dates: {
+        Row: { item_key: string; academic_year_id: string; group_key: string; item_name: string; due_date: string; updated_at: string }
+        Insert: { item_key: string; academic_year_id: string; group_key: string; item_name: string; due_date: string }
+        Update: Partial<Database['public']['Tables']['calendar_reminder_known_dates']['Insert']>
+      }
       calendar_dependencies: {
         Row: {
           id: string
