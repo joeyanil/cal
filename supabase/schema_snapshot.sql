@@ -1,6 +1,6 @@
 -- ============================================================================
 -- K2 Calendar Engine - complete picture of the database after migrations
--- 0001 .. 0023 (and the standalone bootstrap) have been applied.
+-- 0001 .. 0024 (and the standalone bootstrap) have been applied.
 --
 -- WHAT THIS IS: a generated, single-file record of the final structure
 -- (tables, columns, constraints, indexes, functions, triggers, row-level
@@ -17,7 +17,7 @@
 SET check_function_bodies = false; -- functions are created before the tables they mention
 
 
-\restrict Zcn4NEQDk67DSX7q4xanLymo0gHpohY4sdCbTuEFdaMUAJMgWiIDVOyGdYxo4j2
+\restrict c3clfYEqiIUbopwICNhTLqzFjwa3rPqFaBAp5ljBewKKsbRoCpaOB5gE9FkpIVw
 
 CREATE TYPE public.academic_year_status AS ENUM (
     'PREPARING',
@@ -908,6 +908,33 @@ CREATE TABLE public.calendar_dependencies (
     CONSTRAINT calendar_dependencies_dependent_semester_order_check CHECK ((dependent_semester_order = ANY (ARRAY[1, 2])))
 );
 
+CREATE TABLE public.calendar_reminder_dispatch (
+    dispatch_key text NOT NULL,
+    academic_year_id uuid NOT NULL,
+    group_key text NOT NULL,
+    sent_on date NOT NULL,
+    sent_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE public.calendar_reminder_known_dates (
+    item_key text NOT NULL,
+    academic_year_id uuid NOT NULL,
+    group_key text NOT NULL,
+    item_name text NOT NULL,
+    due_date date NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE public.calendar_reminder_settings (
+    group_key text NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    send_30 boolean DEFAULT true NOT NULL,
+    send_15 boolean DEFAULT true NOT NULL,
+    send_5 boolean DEFAULT true NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT calendar_reminder_settings_group_key_check CHECK ((group_key = ANY (ARRAY['TESTS'::text, 'HALF_START'::text, 'HALF_END'::text, 'BREAK'::text, 'STUDENTS_RETURN'::text, 'YEAR_START'::text, 'YEAR_END'::text, 'HOLIDAYS'::text, 'SPECIAL_DAYS'::text])))
+);
+
 CREATE TABLE public.calendar_reminders (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     academic_year_id uuid NOT NULL,
@@ -1033,6 +1060,27 @@ CREATE TABLE public.roles (
     CONSTRAINT roles_name_check CHECK ((btrim(name) <> ''::text))
 );
 
+CREATE TABLE public.special_days (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    academic_year_id uuid NOT NULL,
+    situation text NOT NULL,
+    name text NOT NULL,
+    start_date date NOT NULL,
+    end_date date NOT NULL,
+    students_come boolean NOT NULL,
+    grades smallint[],
+    custom_message text,
+    teacher_audience text DEFAULT 'AFFECTED_GRADES'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_special_day_range CHECK ((end_date >= start_date)),
+    CONSTRAINT special_days_custom_message_check CHECK (((custom_message IS NULL) OR (length(custom_message) <= 500))),
+    CONSTRAINT special_days_grades_check CHECK (((grades IS NULL) OR (((cardinality(grades) >= 1) AND (cardinality(grades) <= 4)) AND (grades <@ ARRAY[(9)::smallint, (10)::smallint, (11)::smallint, (12)::smallint])))),
+    CONSTRAINT special_days_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 120))),
+    CONSTRAINT special_days_situation_check CHECK ((situation = ANY (ARRAY['SPORTS_DAY'::text, 'PARENTS_MEETING'::text, 'TEACHERS_TRAINING'::text, 'SCHOOL_TRIP'::text, 'CEREMONY'::text, 'JOB_CHOICE_WEEK'::text, 'CLUB_CULTURE_DAY'::text, 'HEALTH_DAY'::text, 'CLEANUP_DAY'::text, 'RESULTS_DAY'::text, 'CUSTOM'::text]))),
+    CONSTRAINT special_days_teacher_audience_check CHECK ((teacher_audience = ANY (ARRAY['AFFECTED_GRADES'::text, 'ALL_TEACHERS'::text])))
+);
+
 CREATE TABLE public.student_return_days (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     academic_year_id uuid NOT NULL,
@@ -1077,6 +1125,15 @@ ALTER TABLE ONLY public.audit_logs
 
 ALTER TABLE ONLY public.calendar_dependencies
     ADD CONSTRAINT calendar_dependencies_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.calendar_reminder_dispatch
+    ADD CONSTRAINT calendar_reminder_dispatch_pkey PRIMARY KEY (dispatch_key);
+
+ALTER TABLE ONLY public.calendar_reminder_known_dates
+    ADD CONSTRAINT calendar_reminder_known_dates_pkey PRIMARY KEY (item_key);
+
+ALTER TABLE ONLY public.calendar_reminder_settings
+    ADD CONSTRAINT calendar_reminder_settings_pkey PRIMARY KEY (group_key);
 
 ALTER TABLE ONLY public.calendar_reminders
     ADD CONSTRAINT calendar_reminders_academic_year_id_fact_kind_fact_semester_key UNIQUE (academic_year_id, fact_kind, fact_semester_order, fact_holiday_type_key, fact_exam_type_key, threshold_days);
@@ -1135,6 +1192,9 @@ ALTER TABLE ONLY public.semesters
 ALTER TABLE ONLY public.semesters
     ADD CONSTRAINT semesters_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.special_days
+    ADD CONSTRAINT special_days_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.student_return_days
     ADD CONSTRAINT student_return_days_academic_year_id_key UNIQUE (academic_year_id);
 
@@ -1167,6 +1227,10 @@ CREATE INDEX idx_calendar_dependencies_anchor ON public.calendar_dependencies US
 
 CREATE INDEX idx_calendar_dependencies_year ON public.calendar_dependencies USING btree (academic_year_id) WHERE active;
 
+CREATE INDEX idx_calendar_reminder_dispatch_year ON public.calendar_reminder_dispatch USING btree (academic_year_id, sent_on);
+
+CREATE INDEX idx_calendar_reminder_known_year ON public.calendar_reminder_known_dates USING btree (academic_year_id);
+
 CREATE INDEX idx_calendar_reminders_due_today ON public.calendar_reminders USING btree (trigger_date) WHERE (status = 'PENDING'::public.calendar_reminder_status);
 
 CREATE INDEX idx_exam_instances_year_dates ON public.exam_instances USING btree (academic_year_id, start_date, end_date);
@@ -1178,6 +1242,8 @@ CREATE UNIQUE INDEX idx_one_current_build_per_year ON public.calendar_timeline_b
 CREATE INDEX idx_role_permissions_permission_id ON public.role_permissions USING btree (permission_id);
 
 CREATE INDEX idx_semesters_year ON public.semesters USING btree (academic_year_id);
+
+CREATE INDEX idx_special_days_year_dates ON public.special_days USING btree (academic_year_id, start_date);
 
 CREATE INDEX idx_timeline_builds_year_revision ON public.calendar_timeline_builds USING btree (academic_year_id, source_config_revision DESC);
 
@@ -1213,6 +1279,8 @@ CREATE TRIGGER trg_bump_revision_on_year_boundary_change BEFORE UPDATE ON public
 
 CREATE TRIGGER trg_calendar_dependencies_validate BEFORE INSERT OR UPDATE ON public.calendar_dependencies FOR EACH ROW EXECUTE FUNCTION public.fn_validate_calendar_dependency();
 
+CREATE TRIGGER trg_calendar_reminder_settings_updated_at BEFORE UPDATE ON public.calendar_reminder_settings FOR EACH ROW EXECUTE FUNCTION public.fn_update_timestamp();
+
 CREATE TRIGGER trg_check_timeline_day_year_matches_build BEFORE INSERT OR UPDATE ON public.calendar_timeline_days FOR EACH ROW EXECUTE FUNCTION public.fn_check_timeline_day_year_matches_build();
 
 CREATE TRIGGER trg_create_default_semesters AFTER INSERT ON public.academic_years FOR EACH ROW EXECUTE FUNCTION public.fn_create_default_semesters();
@@ -1237,6 +1305,10 @@ CREATE TRIGGER trg_semesters_updated_at BEFORE UPDATE ON public.semesters FOR EA
 
 CREATE TRIGGER trg_semesters_validate_ordering BEFORE INSERT OR UPDATE ON public.semesters FOR EACH ROW EXECUTE FUNCTION public.fn_validate_semester_ordering();
 
+CREATE TRIGGER trg_special_days_audit AFTER INSERT OR DELETE OR UPDATE ON public.special_days FOR EACH ROW EXECUTE FUNCTION public.fn_audit_log();
+
+CREATE TRIGGER trg_special_days_updated_at BEFORE UPDATE ON public.special_days FOR EACH ROW EXECUTE FUNCTION public.fn_update_timestamp();
+
 CREATE TRIGGER trg_student_return_days_audit AFTER INSERT OR DELETE OR UPDATE ON public.student_return_days FOR EACH ROW EXECUTE FUNCTION public.fn_audit_log();
 
 CREATE TRIGGER trg_student_return_days_updated_at BEFORE UPDATE ON public.student_return_days FOR EACH ROW EXECUTE FUNCTION public.fn_update_timestamp();
@@ -1254,6 +1326,12 @@ ALTER TABLE ONLY public.calendar_dependencies
 
 ALTER TABLE ONLY public.calendar_dependencies
     ADD CONSTRAINT calendar_dependencies_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+
+ALTER TABLE ONLY public.calendar_reminder_dispatch
+    ADD CONSTRAINT calendar_reminder_dispatch_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.calendar_reminder_known_dates
+    ADD CONSTRAINT calendar_reminder_known_dates_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.calendar_reminders
     ADD CONSTRAINT calendar_reminders_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE CASCADE;
@@ -1297,6 +1375,9 @@ ALTER TABLE ONLY public.role_permissions
 ALTER TABLE ONLY public.semesters
     ADD CONSTRAINT semesters_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE CASCADE;
 
+ALTER TABLE ONLY public.special_days
+    ADD CONSTRAINT special_days_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE CASCADE;
+
 ALTER TABLE ONLY public.student_return_days
     ADD CONSTRAINT student_return_days_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE CASCADE;
 
@@ -1334,6 +1415,20 @@ CREATE POLICY calendar_dependencies_insert_manage ON public.calendar_dependencie
 CREATE POLICY calendar_dependencies_select_authenticated ON public.calendar_dependencies FOR SELECT TO authenticated USING (public.has_permission('calendar.view'::text));
 
 CREATE POLICY calendar_dependencies_update_manage ON public.calendar_dependencies FOR UPDATE TO authenticated USING (public.has_permission('calendar.manage_dependencies'::text)) WITH CHECK (public.has_permission('calendar.manage_dependencies'::text));
+
+ALTER TABLE public.calendar_reminder_dispatch ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY calendar_reminder_dispatch_select ON public.calendar_reminder_dispatch FOR SELECT TO authenticated USING (public.has_permission('calendar.view'::text));
+
+ALTER TABLE public.calendar_reminder_known_dates ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY calendar_reminder_known_dates_select ON public.calendar_reminder_known_dates FOR SELECT TO authenticated USING (public.has_permission('calendar.view'::text));
+
+ALTER TABLE public.calendar_reminder_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY calendar_reminder_settings_select ON public.calendar_reminder_settings FOR SELECT TO authenticated USING (public.has_permission('calendar.view'::text));
+
+CREATE POLICY calendar_reminder_settings_update ON public.calendar_reminder_settings FOR UPDATE TO authenticated USING (public.has_permission('calendar.manage'::text)) WITH CHECK (public.has_permission('calendar.manage'::text));
 
 ALTER TABLE public.calendar_reminders ENABLE ROW LEVEL SECURITY;
 
@@ -1418,6 +1513,22 @@ CREATE POLICY semesters_insert_manage ON public.semesters FOR INSERT TO authenti
 CREATE POLICY semesters_select_authenticated ON public.semesters FOR SELECT TO authenticated USING (public.has_permission('calendar.view'::text));
 
 CREATE POLICY semesters_update_manage ON public.semesters FOR UPDATE TO authenticated USING ((public.has_permission('calendar.manage'::text) AND (status <> 'CLOSED'::public.semester_status))) WITH CHECK (public.has_permission('calendar.manage'::text));
+
+ALTER TABLE public.special_days ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY special_days_delete_manage ON public.special_days FOR DELETE TO authenticated USING ((public.has_permission('calendar.manage'::text) AND (( SELECT academic_years.status
+   FROM public.academic_years
+  WHERE (academic_years.id = special_days.academic_year_id)) <> 'CLOSED'::public.academic_year_status)));
+
+CREATE POLICY special_days_insert_manage ON public.special_days FOR INSERT TO authenticated WITH CHECK ((public.has_permission('calendar.manage'::text) AND (( SELECT academic_years.status
+   FROM public.academic_years
+  WHERE (academic_years.id = special_days.academic_year_id)) <> 'CLOSED'::public.academic_year_status)));
+
+CREATE POLICY special_days_select_authenticated ON public.special_days FOR SELECT TO authenticated USING (public.has_permission('calendar.view'::text));
+
+CREATE POLICY special_days_update_manage ON public.special_days FOR UPDATE TO authenticated USING ((public.has_permission('calendar.manage'::text) AND (( SELECT academic_years.status
+   FROM public.academic_years
+  WHERE (academic_years.id = special_days.academic_year_id)) <> 'CLOSED'::public.academic_year_status))) WITH CHECK (public.has_permission('calendar.manage'::text));
 
 ALTER TABLE public.student_return_days ENABLE ROW LEVEL SECURITY;
 
@@ -1585,6 +1696,18 @@ GRANT ALL ON TABLE public.calendar_dependencies TO anon;
 GRANT ALL ON TABLE public.calendar_dependencies TO authenticated;
 GRANT ALL ON TABLE public.calendar_dependencies TO service_role;
 
+GRANT ALL ON TABLE public.calendar_reminder_dispatch TO anon;
+GRANT ALL ON TABLE public.calendar_reminder_dispatch TO authenticated;
+GRANT ALL ON TABLE public.calendar_reminder_dispatch TO service_role;
+
+GRANT ALL ON TABLE public.calendar_reminder_known_dates TO anon;
+GRANT ALL ON TABLE public.calendar_reminder_known_dates TO authenticated;
+GRANT ALL ON TABLE public.calendar_reminder_known_dates TO service_role;
+
+GRANT ALL ON TABLE public.calendar_reminder_settings TO anon;
+GRANT ALL ON TABLE public.calendar_reminder_settings TO authenticated;
+GRANT ALL ON TABLE public.calendar_reminder_settings TO service_role;
+
 GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE ON TABLE public.calendar_reminders TO anon;
 GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE ON TABLE public.calendar_reminders TO authenticated;
 GRANT ALL ON TABLE public.calendar_reminders TO service_role;
@@ -1625,6 +1748,10 @@ GRANT ALL ON TABLE public.roles TO anon;
 GRANT ALL ON TABLE public.roles TO authenticated;
 GRANT ALL ON TABLE public.roles TO service_role;
 
+GRANT ALL ON TABLE public.special_days TO anon;
+GRANT ALL ON TABLE public.special_days TO authenticated;
+GRANT ALL ON TABLE public.special_days TO service_role;
+
 GRANT ALL ON TABLE public.student_return_days TO anon;
 GRANT ALL ON TABLE public.student_return_days TO authenticated;
 GRANT ALL ON TABLE public.student_return_days TO service_role;
@@ -1653,14 +1780,14 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES 
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO authenticated;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO service_role;
 
-\unrestrict Zcn4NEQDk67DSX7q4xanLymo0gHpohY4sdCbTuEFdaMUAJMgWiIDVOyGdYxo4j2
+\unrestrict c3clfYEqiIUbopwICNhTLqzFjwa3rPqFaBAp5ljBewKKsbRoCpaOB5gE9FkpIVw
 
 
 -- ---------------------------------------------------------------------------
 -- Built-in catalog rows
 -- ---------------------------------------------------------------------------
 
-\restrict 2YvnHd2zty9VKUObcfyPx0X8XcOxoKdKJbA3jveXp2ezpWsKvUUUFA79WFS3V2g
+\restrict MsqB6y7gVZcIpJdgwIMVcOOciFPzRpkQid9DvjFT5TfxNzUQvP7eXB2GsS3Q5Es
 
 INSERT INTO public.exam_types (key, name, semester_order, closes_school, grade_scope) VALUES ('S1_REGIONAL_MODEL', 'Semester 1 Regional Model Exam', 1, true, 'ALL');
 INSERT INTO public.exam_types (key, name, semester_order, closes_school, grade_scope) VALUES ('S1_FINAL', 'Semester 1 Final Exam', 1, true, 'ALL');
@@ -1697,5 +1824,5 @@ INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES 
 INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('06c784ff-9a78-4fc0-a5c1-eb6872af4dc4', '34589f24-6779-41f4-8feb-5c9ceba6c819', '2026-11-12 00:50:41.321712+00');
 INSERT INTO public.role_permissions (role_id, permission_id, created_at) VALUES ('06c784ff-9a78-4fc0-a5c1-eb6872af4dc4', '6f63fdf1-ea00-4f26-b10e-7c100cc45789', '2026-11-12 00:50:41.321712+00');
 
-\unrestrict 2YvnHd2zty9VKUObcfyPx0X8XcOxoKdKJbA3jveXp2ezpWsKvUUUFA79WFS3V2g
+\unrestrict MsqB6y7gVZcIpJdgwIMVcOOciFPzRpkQid9DvjFT5TfxNzUQvP7eXB2GsS3Q5Es
 

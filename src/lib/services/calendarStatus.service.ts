@@ -74,3 +74,30 @@ export async function getYearExportRows(
   const source = await loadCalendarSource(supabase, academicYearId)
   return buildYearExportRows(entries, source.specialDays)
 }
+
+/**
+ * How many school days fall between `from` and `to` (both included), for the
+ * whole school or one grade. `enrolledFrom` is for a student who joined late:
+ * counting starts on that day if it is later than `from`. Special days where
+ * students stay home are not counted.
+ */
+export async function getSchoolDaysInPeriod(
+  supabase: SupabaseClient<Database>,
+  ctx: AuthContext,
+  academicYearId: string,
+  from: ISODate,
+  to: ISODate,
+  grade: Grade | null = null,
+  enrolledFrom: ISODate | null = null,
+): Promise<{ count: number; from: ISODate; to: ISODate }> {
+  if (!can(ctx, 'calendar.view')) throw new AppError('FORBIDDEN', 403)
+  const start = enrolledFrom && enrolledFrom > from ? enrolledFrom : from
+  const source = await loadCalendarSource(supabase, academicYearId)
+  const entries = await getCurrentTimeline(supabase, ctx, academicYearId)
+  let count = 0
+  for (const e of entries) {
+    if (e.date < start || e.date > to) continue
+    if (dayStatus({ date: e.date, year: source.year, timelineDay: e, specialDays: source.specialDays, grade }).attendanceAvailable) count++
+  }
+  return { count, from: start, to }
+}

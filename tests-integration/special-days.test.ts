@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Special days, day status, reminder settings and the daily reminder job,
  * run against the real database (scripts/local-db/setup.sh).
@@ -11,10 +12,9 @@ import { createAcademicYear, updateAcademicYearBoundary } from '@/lib/services/a
 import { setSemesterDates } from '@/lib/services/semester.service'
 import { setExamInstance } from '@/lib/services/exam.service'
 import { setStudentReturn } from '@/lib/services/studentReturn.service'
-import { enterMovableHoliday } from '@/lib/services/holiday.service'
 import { rebuildAndPublishTimeline, getCurrentTimeline } from '@/lib/services/calendarTimeline.service'
 import { createSpecialDay, updateSpecialDay, deleteSpecialDay, listSpecialDays } from '@/lib/services/specialDay.service'
-import { getDayStatus, getPosition, getYearExportRows } from '@/lib/services/calendarStatus.service'
+import { getDayStatus, getPosition, getYearExportRows, getSchoolDaysInPeriod } from '@/lib/services/calendarStatus.service'
 import { getReminderSettings, updateReminderSettings, runDailyReminders, previewReminders } from '@/lib/services/calendarReminder.service'
 import { InMemoryNotificationPort } from '@/lib/services/notification.port'
 import { ethiopianDate as E } from '@/lib/calendar/ethiopian-date'
@@ -133,6 +133,20 @@ describe('special days (real database)', () => {
     const s = await getDayStatus(supabase, c, y2.id, E(Y + 1, 2, 10) as any, null)
     expect(s.source).toBe('PARTIAL_RULE')
     sql(`delete from academic_years where id='${y2.id}'`)
+  })
+
+  it('counts school days in a period: whole school, one grade, late enrolment, special days', async () => {
+    const from = E(Y, 2, 1) as any, to = E(Y, 2, 30) as any
+    const all = (await getSchoolDaysInPeriod(supabase, c, yearId, from, to)).count
+    expect(all).toBeGreaterThan(10)
+    expect((await getSchoolDaysInPeriod(supabase, c, yearId, from, to, 10)).count).toBe(all)
+    const late = await getSchoolDaysInPeriod(supabase, c, yearId, from, to, null, E(Y, 2, 15) as any)
+    expect(late.from).toBe(E(Y, 2, 15))
+    expect(late.count).toBeLessThan(all)
+    const days = (await getCurrentTimeline(supabase, c, yearId)).filter((e) => e.teachingDay && e.date >= from && e.date <= to)
+    const { specialDay } = await createSpecialDay(supabase, c, yearId, { situation: 'TEACHERS_TRAINING', name: 'Training', startDate: days[0]!.date as any, studentsCome: false })
+    expect((await getSchoolDaysInPeriod(supabase, c, yearId, from, to)).count).toBe(all - 1)
+    await deleteSpecialDay(supabase, c, yearId, specialDay.id)
   })
 
   it('position tells where we are and what comes next', async () => {

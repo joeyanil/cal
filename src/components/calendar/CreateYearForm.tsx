@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '../ui/button'
 
-export function CreateYearForm() {
+export function CreateYearForm({ suggestedYearEc }: { suggestedYearEc?: number }) {
   const router = useRouter()
-  const [yearEc, setYearEc] = useState('')
+  const [yearEc, setYearEc] = useState(suggestedYearEc ? String(suggestedYearEc) : '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [existingId, setExistingId] = useState<string | null>(null)
@@ -40,7 +40,7 @@ export function CreateYearForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2">
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-        Ethiopian year
+        Ethiopian year{suggestedYearEc ? ' (next year suggested)' : ''}
         <input
           required
           type="number"

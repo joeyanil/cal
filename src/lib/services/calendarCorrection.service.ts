@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import type { Database } from '@/types/database.types'
+import { rebuildAndPublishTimeline } from './calendarTimeline.service'
 import { AppError } from '../errors/AppError'
 import { can } from '../permissions/engine'
 import type { AuthContext } from '../auth/withAuth'
@@ -29,9 +30,8 @@ export const applyCorrectionSchema = z.object({
  * to the main admin role only. By the owner's decision the date is simply
  * updated: no reason is asked for and no correction record is kept.
  *
- * Deliberately does NOT rebuild the timeline itself - call
- * `rebuildAndPublishTimeline` afterward so the new date reaches the calendar.
- * Returns the new date.
+ * Rebuilds and publishes the timeline afterward, so the corrected date
+ * reaches the calendar at once (when the person may build timelines).
  */
 export async function applyCalendarCorrection(
   supabase: SupabaseClient<Database>,
@@ -57,5 +57,13 @@ export async function applyCalendarCorrection(
     }
     throw new AppError('CALENDAR_CORRECTION_FAILED', 500, error.message)
   }
-  return { correctedValue: data }
+
+  // Rebuild the calendar so the corrected date shows everywhere straight
+  // away. Skipped (and reported) if the person may not build timelines.
+  let timelineRebuilt = false
+  if (can(ctx, 'calendar.build_timeline')) {
+    await rebuildAndPublishTimeline(supabase, ctx, academicYearId)
+    timelineRebuilt = true
+  }
+  return { correctedValue: data, timelineRebuilt }
 }

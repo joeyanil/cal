@@ -16,7 +16,7 @@ business rules, the integration checklist, and what is still open.
 | `src/lib/services/` | Persistence layer between the engine and Supabase |
 | `src/app/api/v1/` | REST route handlers (years, semesters, holidays, exams, student return, timeline, validation, dependencies, corrections) |
 | `src/app/calendar/`, `src/components/calendar/` | The admin screens: year list, year overview, six-step setup wizard, full-year calendar view, year status card |
-| `supabase/` | **All SQL**: `migrations/0001`–`0023`, `standalone/` bootstrap, `schema_snapshot.sql`, and `README.md` (run order, integration contract) |
+| `supabase/` | **All SQL**: `migrations/0001`–`0024`, `standalone/` bootstrap, `schema_snapshot.sql`, and `README.md` (run order, integration contract) |
 | `tests/` | 219 unit and screen-logic tests (`npm test`) |
 | `tests-integration/` | Tests that run against a real PostgreSQL + PostgREST (`npm run test:integration`) |
 | `scripts/local-db/` | Builds that real local database from the repo's SQL; database fingerprint and diagnostic queries |

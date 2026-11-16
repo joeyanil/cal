@@ -1,9 +1,9 @@
 # Expected database fingerprint
 
-Produced by `scripts/local-db/fingerprint.sql` on a database built from `supabase/standalone/0000_standalone_bootstrap.sql` plus migrations 0001 to 0023, on PostgreSQL 16.
+Produced by `scripts/local-db/fingerprint.sql` on a database built from `supabase/standalone/0000_standalone_bootstrap.sql` plus migrations 0001 to 0024, on PostgreSQL 16.
 
 ```json
-{"enums": {"n": 10, "defs": "200320e1", "names": "90217420"}, "tables": {"n": 19, "defs": "462a6db9", "names": "ee49b5f3"}, "columns": {"n": 152, "defs": "8e5abdef", "names": "9adcee37"}, "indexes": {"n": 50, "defs": "1a5efa9e", "names": "3be219f7"}, "policies": {"n": 35, "defs": "a600dbfc", "names": "31254d4f"}, "triggers": {"n": 24, "defs": "1ff25a9d", "names": "440244c0"}, "functions": {"n": 23, "defs": "7ddcc6c9", "names": "64244be2"}, "constraints": {"n": 77, "defs": "32e9071d", "names": "1c6ae899"}}
+{"enums": {"n": 10, "defs": "200320e1", "names": "90217420"}, "tables": {"n": 23, "defs": "dfc96256", "names": "438f6e7e"}, "columns": {"n": 181, "defs": "ea1e6d92", "names": "1aa8933c"}, "indexes": {"n": 57, "defs": "fa6b34b7", "names": "1f59bcec"}, "policies": {"n": 43, "defs": "eab7b866", "names": "21ebdab6"}, "triggers": {"n": 27, "defs": "e7c564ea", "names": "3485dbe5"}, "functions": {"n": 23, "defs": "7ddcc6c9", "names": "64244be2"}, "constraints": {"n": 91, "defs": "46b28706", "names": "68ec452e"}}
 ```
 
 How to read it: for each kind of object, `n` is how many there are, `names` is a code for the list of names, and `defs` is a code for the exact definitions.
