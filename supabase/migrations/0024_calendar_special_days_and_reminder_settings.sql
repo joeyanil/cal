@@ -148,3 +148,9 @@ CREATE POLICY calendar_reminder_known_dates_select ON calendar_reminder_known_da
     FOR SELECT TO authenticated USING (has_permission('calendar.view'));
 GRANT SELECT ON calendar_reminder_known_dates TO authenticated;
 GRANT ALL ON calendar_reminder_known_dates TO service_role;
+
+-- A visitor who is not signed in must not be able to call the correction
+-- function at all (it also checks the permission, this is a second lock).
+REVOKE ALL ON FUNCTION fn_apply_calendar_correction(
+    UUID, calendar_fact_kind, SMALLINT, holiday_type_key, exam_type_key, DATE
+) FROM anon;
