@@ -2,7 +2,7 @@
   "name": "k2-calendar-engine",
   "version": "0.1.0",
   "private": true,
-  "description": "K2 Academic Calendar Engine \u2014 first-class TypeScript/Next.js subsystem of the K2 school platform, skinned in K2's locked Admin design system (20_Design_System.md).",
+  "description": "K2 Academic Calendar Engine — first-class TypeScript/Next.js subsystem of the K2 school platform, skinned in K2's locked Admin design system (20_Design_System.md).",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -25,7 +25,7 @@
     "date-fns": "3.6.0",
     "kenat": "4.0.0",
     "lucide-react": "0.446.0",
-    "next": "15.5.25",
+    "next": "15.5.29",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "tailwind-merge": "2.6.0",
@@ -36,18 +36,18 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "3.1.0",
-    "@opennextjs/cloudflare": "^1.20.6",
+    "@opennextjs/cloudflare": "^1.20.17",
     "@types/node": "20.16.5",
     "@types/react": "18.3.5",
     "@types/react-dom": "18.3.0",
     "autoprefixer": "10.4.20",
     "eslint": "9.39.5",
-    "eslint-config-next": "15.5.25",
+    "eslint-config-next": "15.5.29",
     "postcss": "8.5.28",
     "tailwindcss": "3.4.11",
     "tailwindcss-animate": "1.0.7",
     "typescript": "5.6.2",
     "vitest": "2.1.9",
-    "wrangler": "^4.136.1"
+    "wrangler": "^4.163.0"
   }
 }
