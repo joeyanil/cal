@@ -4,6 +4,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { listAcademicYears } from '@/lib/services/academicYear.service'
 import { Panel } from '@/components/ui/panel'
 import { LifecycleBadge } from '@/components/ui/badge'
+import { scaffoldNextAcademicYear } from '@/lib/calendar'
 import { CreateYearForm } from '@/components/calendar/CreateYearForm'
 import { ErrorState } from '@/components/calendar/ErrorState'
 import { formatEthiopian } from '@/lib/calendar'
@@ -25,7 +26,7 @@ export default async function CalendarDashboardPage() {
         </div>
 
         <Panel title="Start a new academic year">
-          <CreateYearForm />
+          <CreateYearForm suggestedYearEc={years.length > 0 ? scaffoldNextAcademicYear({ yearEc: Math.max(...years.map((y) => y.yearEc)) }).suggestedYearEc : undefined} />
         </Panel>
 
         <Panel title="All years">

@@ -57,6 +57,17 @@ export default async function AcademicYearPage({ params }: Props) {
             <Link href={`/calendar/${yearId}/year`} className="font-medium text-primary underline underline-offset-4">
               View full year →
             </Link>
+            <Link href={`/calendar/${yearId}/special-days`} className="font-medium text-primary underline underline-offset-4">
+              Special days →
+            </Link>
+            <Link href={`/calendar/${yearId}/reminders`} className="font-medium text-primary underline underline-offset-4">
+              Reminders →
+            </Link>
+            {year.status === 'CLOSED' && (
+              <Link href={`/calendar/${yearId}/correct`} className="font-medium text-primary underline underline-offset-4">
+                Correct a date →
+              </Link>
+            )}
           </div>
         </Panel>
 

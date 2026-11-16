@@ -213,21 +213,6 @@ export interface DependencyRule {
 }
 
 // ---------------------------------------------------------------------------
-// Formal Corrections (Deep Domain File 2, section E — "PROTECTED")
-// ---------------------------------------------------------------------------
-
-export interface CalendarCorrection {
-  id: string
-  academicYearId: string
-  fact: CalendarFactRef
-  originalValue: ISODate
-  correctedValue: ISODate
-  reason: string
-  performedByUserId: string
-  performedAt: string
-}
-
-// ---------------------------------------------------------------------------
 // The Full-Year Daily Timeline (Deep Domain File 3, section N)
 // ---------------------------------------------------------------------------
 

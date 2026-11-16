@@ -4,7 +4,11 @@ import { createServerClient } from '@/lib/supabase/server'
 import { getAcademicYear } from '@/lib/services/academicYear.service'
 import { getCurrentTimeline } from '@/lib/services/calendarTimeline.service'
 import { listHolidayState } from '@/lib/services/holiday.service'
-import { buildHolidayList } from '@/lib/calendar'
+import { getPosition } from '@/lib/services/calendarStatus.service'
+import { listSpecialDays } from '@/lib/services/specialDay.service'
+import { schoolToday } from '@/lib/services/today'
+import { PositionCard } from '@/components/calendar/PositionCard'
+import { buildHolidayList, formatEthiopian } from '@/lib/calendar'
 import { YearView } from '@/components/calendar/YearView'
 import { ErrorState } from '@/components/calendar/ErrorState'
 import { Panel } from '@/components/ui/panel'
@@ -30,6 +34,9 @@ export default async function YearViewPage({ params }: Props) {
       yearEnd: year.endDate,
     })
 
+    const position = await getPosition(supabase, ctx, yearId, schoolToday())
+    const specialDays = await listSpecialDays(supabase, ctx, yearId)
+
     return (
       <div className="space-y-6">
         <div className="flex items-baseline justify-between">
@@ -40,7 +47,27 @@ export default async function YearViewPage({ params }: Props) {
             </Link>
           </div>
         </div>
+        <PositionCard position={position} teachingDaysLeft={position.teachingDaysLeftInYear} />
         <YearView entries={entries} holidays={holidays} ministryTargetDays={year.ministryTargetDays ?? null} />
+        {specialDays.length > 0 && (
+          <Panel title="Special days">
+            <div className="space-y-1 text-sm text-muted-foreground">
+              {specialDays.map((d) => (
+                <p key={d.id}>
+                  <strong className="text-foreground">{d.name}</strong> · {formatEthiopian(d.startDate)}
+                  {d.endDate !== d.startDate && ` – ${formatEthiopian(d.endDate)}`} ·{' '}
+                  {d.grades === null ? 'Whole school' : `Grade ${d.grades.join(', ')}`} ·{' '}
+                  {d.studentsCome ? 'Students come' : 'Students stay home'}
+                </p>
+              ))}
+            </div>
+          </Panel>
+        )}
+        <Panel title="Download">
+          <a href={`/api/v1/academic-years/${yearId}/export?format=csv`} className="text-sm font-medium text-primary underline underline-offset-4">
+            Download the whole year as a spreadsheet (opens in Excel) →
+          </a>
+        </Panel>
       </div>
     )
   } catch (error) {

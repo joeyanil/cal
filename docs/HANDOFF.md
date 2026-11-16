@@ -15,7 +15,7 @@ For one Ethiopian school year at a time (2019 E.C. is the reference year):
 - **Daily timeline**: every calendar day gets exactly one type (learning day, exam day, holiday, semester break, student return, last day of year, weekend), built deterministically and verified after building.
 - **Counts**: learning days, exam days, days without lessons, per semester and per month. Optional "Ministry total" reminder for comparison only.
 - **Validation** with four levels (Missing, Error, Warning, Information); a year cannot become Ready with missing items or errors.
-- **API only (no screen yet)**: dependency rules (one date derived from another), formal corrections to a Closed year with audit trail. **Engine logic only (no screen, route or scheduled job yet)**: reminders (the `calendar_reminders` table exists) and year-to-year rollover.
+- **API only (no screen yet)**: dependency rules (one date derived from another), corrections to a Closed year (main admin only; the date is simply updated, no reason, no record kept - owner decision). **Engine logic only (no screen, route or scheduled job yet)**: reminders (the `calendar_reminders` table exists) and year-to-year rollover.
 
 ## 2. Business rules decided during the build
 
@@ -53,7 +53,7 @@ These came from the Ministry's 2019 E.C. plan and from decisions made with the p
 ## 5. Integration checklist
 
 1. **Database contract.** Read `supabase/README.md` section 4. The main system must provide `users`, `has_permission(text)`, `fn_update_timestamp()`, `fn_audit_log()` and `audit_logs`. Replace `supabase/standalone/0000_standalone_bootstrap.sql` with the main system's versions.
-2. **Run the SQL** in the order given in `supabase/README.md`: migrations 0001 to 0022, with **0021a run on its own**. Never edit a migration that has run; add the next number.
+2. **Run the SQL** in the order given in `supabase/README.md`: migrations 0001 to 0024, with **0021a run on its own**. Never edit a migration that has run; add the next number.
 3. **Permissions.** Grant the seven `calendar.*` permissions (`view`, `manage`, `manage_exams`, `manage_holidays`, `build_timeline`, `manage_dependencies`, `correct_history`) to the right roles.
 4. **Auth.** Pages redirect signed-out visitors to `/login`; change `src/app/calendar/layout.tsx` if the main system uses another path. The layout uses a stand-in shell (`src/components/layout/`); replace it with the main system's shell.
 5. **Mount** the `/calendar` pages and `/api/v1` routes in the main app (or keep this app as a sub-application).
@@ -84,3 +84,50 @@ These came from the Ministry's 2019 E.C. plan and from decisions made with the p
 ## 8. Document index
 
 `docs/HANDOFF.md` (this file) · `supabase/README.md` (database) · `docs/DB_FINGERPRINT.md` (check a live database) · `docs/MINISTRY_2019_AUDIT.md` (the Ministry plan checked against the engine) · `DEPLOYMENT.md` (Cloudflare + Supabase) · `scripts/local-db/README.md` (real local test database) · older notes listed in `README.md`.
+
+
+---
+
+## Completion round (owner decisions)
+
+Every decision below was made by the school owner, one question at a time. The code is the source of truth.
+
+| # | Decision | Where it lives |
+|---|---|---|
+| 1 | Grade 12 national test: no attendance and no teaching day for Grade 12 only; every other grade carries on | `dayStatus.ts`, timeline `grade12AttendanceAvailable` |
+| 2 | Ginbot 20 stays in the holiday list, switched on; a school can switch it off | `holidays.ts` |
+| 3 | Easter keeps its date and the on/off switch; no note | `holidays.ts` |
+| 4 | Reminder messages are English only for now; every sentence is in one file so another language can be added | `reminderMessages.ts` |
+| 5 | Reminders go to everyone the date affects, each role in its own words (student, Grade 12 student, teacher, homeroom teacher, Grade 12 homeroom teacher, office team) | `reminderMessages.ts`, `calendarEvents.ts` |
+| 6 | Nine reminder groups, each switchable, each at 30 / 15 / 5 days; a holiday reminds only when switched on and not on a weekend | `calendarEvents.ts`, `reminderPlan.ts`, `calendar_reminder_settings` |
+| 7 | A moved date sends one "this has moved" message to the people affected | `reminderPlan.ts` (`detectMovedItems`) |
+| 8 | All four school tests close the school for lessons | `exams.ts` |
+| 9 | Special days: ten ready-made situations plus "My own", with a yes/no for students coming, whole school or chosen grades, own wording, and which teachers (default: teachers of the affected grades; all teachers for a training day) | `specialDays.ts`, `special_days` |
+| 10 | Export as PDF and Excel: the engine gives the rows (and a CSV); the platform makes PDF/Excel | `yearExport.ts` |
+| 11 | Teachers and students see a read-only "year at a glance" page | `/calendar/[yearId]/year` |
+| 12 | Corrections in a closed year: main admin only, the date is simply updated, the calendar is rebuilt, **no reason and no record** | migration 0023 |
+| 13 | Dependency rules ("this date follows that date") stay behind the scenes; no screen | `dependencyResolution.ts` |
+
+### What the platform calls
+
+| Question | Call |
+|---|---|
+| Is attendance available on this date (for this grade)? | `getDayStatus` / `GET /academic-years/:id/day-status` |
+| How many school days between two dates? | `getSchoolDaysInPeriod` / `GET .../school-days` |
+| Where are we in the year, what is next? | `getPosition` / `GET .../position` |
+| Every dated item of the year | `getCalendarEvents` / `GET .../events` |
+| The whole year as rows for PDF / Excel | `getYearExportRows` / `GET .../export` |
+| Send today's reminders | `runDailyReminders(adminClient, port, today)` / `POST /api/v1/calendar/reminders/run` with header `x-calendar-job-secret` |
+
+### Reminders: how delivery is connected
+
+The engine decides what to say and to whom; the platform delivers. The platform supplies a `NotificationPort` (`notification.port.ts`): `listRecipients()` returns each user with their role (`STUDENT` + grade, `TEACHER` + grades taught, `HOMEROOM_TEACHER` + grade, `OFFICE`), and `deliver()` writes the platform notification (title, message, type, link). Replace `getNotificationPort()` in `notification.adapter.ts`. Until then the job does nothing and remembers nothing, so no reminder is lost.
+
+The job must run **once a day**. A reminder goes out only on the exact day 30, 15 or 5 days before; running the job twice in one day sends nothing twice. Call the route from a scheduler (a Cloudflare Cron Trigger or a Supabase scheduled function) with the secret in `CALENDAR_JOB_SECRET`.
+
+### Things to know
+
+- Special days sit beside the published timeline, so adding one never needs a rebuild. `dayStatus` combines them.
+- The Semester 1 start and year start (and Semester 2 end and year end, and school resumes and Semester 2 start) are the same day: only one reminder goes out for each pair.
+- The general audit log of the platform (`fn_audit_log` triggers) still records changes to calendar tables. "No trace" applies to the calendar's own correction record only.
+- Give `calendar.correct_history` to the main admin role only.

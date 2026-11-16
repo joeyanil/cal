@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "k2-calendar-engine",
+  "name": "calendar-engine",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-09-22",
   "compatibility_flags": ["nodejs_compat"],
