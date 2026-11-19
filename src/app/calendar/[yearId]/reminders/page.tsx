@@ -11,6 +11,7 @@ import { ReminderSettingsPanel } from '@/components/calendar/ReminderSettingsPan
 import { ErrorState } from '@/components/calendar/ErrorState'
 import { Panel } from '@/components/ui/panel'
 export const dynamic = 'force-dynamic'
+export const metadata = { title: 'Reminders — K2 Calendar' }
 
 interface Props {
   params: Promise<{ yearId: string }>
@@ -44,6 +45,11 @@ export default async function RemindersPage({ params }: Props) {
           <h1 className="text-2xl font-bold text-foreground">{year.name} — reminders</h1>
           <Link href={`/calendar/${yearId}`} className="text-sm text-primary underline underline-offset-4">← Back to year overview</Link>
         </div>
+        <Panel title="How reminders are delivered">
+          <p className="text-sm text-muted-foreground">
+            This page prepares the reminders and shows exactly what people will read. They start reaching people once the school&apos;s notification system is connected to the calendar.
+          </p>
+        </Panel>
         <Panel title="What the school sends">
           <p className="mb-3 text-sm text-muted-foreground">
             Switch a group off, or choose which of the three countdowns (30, 15 and 5 days before) are sent.

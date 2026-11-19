@@ -79,7 +79,7 @@ const KIND_META: Record<DayKind, KindMeta> = {
 const OVERLAY_META = {
   G12: {
     name: 'Grade 12 national exam week',
-    blurb: 'Held nationally. Lessons and attendance carry on, so these are still learning days.',
+    blurb: 'Held nationally. Grade 12 is excused: no lessons and no attendance. Every other grade carries on, so these are still learning days for them.',
   },
   HOLIDAY_ON_WEEKEND: {
     name: 'Holiday on a weekend',
@@ -152,7 +152,7 @@ function dayDetails(entry: DailyTimelineEntry): { primary: string; subtitle: str
     lines.push(
       e.closesSchool
         ? `Exam day ${e.dayNumber} of ${e.totalDays}. Students sit the exam at school; no lessons and no attendance.`
-        : `Day ${e.dayNumber} of ${e.totalDays}. Held nationally; lessons and attendance carry on.`,
+        : `Day ${e.dayNumber} of ${e.totalDays}. Held nationally. Grade 12 is excused; every other grade carries on.`,
     )
   }
   if (!holidayNames.length && !examNames.length) lines.push(KIND_META[kind].blurb)
@@ -212,7 +212,7 @@ export function YearView({
           </p>
           {summary.g12Days > 0 && (
             <p className="text-xs leading-relaxed text-muted-foreground">
-              The Grade 12 national exam week ({summary.g12Days} days) is held outside the school&apos;s own timetable, so lessons carry on and those days are still learning days.
+              The Grade 12 national exam week ({summary.g12Days} days): Grade 12 is excused from lessons and attendance. Every other grade carries on, so those days still count as learning days for them.
             </p>
           )}
         </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronLeft, ChevronRight, AlertTriangle, Ban, Lock } from 'lucide-react'
 import { Button } from '../ui/button'
@@ -23,7 +23,6 @@ import {
   friendlyLines,
   holidayImpact,
   indexHolidaysByDate,
-  isWeekend,
   isoDate,
   localizeMessage,
   requiredFilled,
@@ -224,6 +223,11 @@ function Stepper({
   status: Record<StepKey, 'done' | 'error' | 'todo'>
   onGo: (i: number) => void
 }) {
+  // Keep the current step visible on a narrow screen.
+  const activeRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    activeRef.current?.scrollIntoView?.({ inline: 'center', block: 'nearest' })
+  }, [current])
   return (
     <nav aria-label="Setup steps">
       <ol className="flex items-center gap-1 overflow-x-auto pb-1">
@@ -235,10 +239,12 @@ function Stepper({
             <li key={key} className="flex items-center gap-1">
               <button
                 type="button"
+                ref={active ? activeRef : undefined}
                 disabled={!reachable}
                 aria-current={active ? 'step' : undefined}
+                aria-label={`Step ${i + 1}: ${STEP_META[key].label}${s === 'done' ? ', done' : s === 'error' ? ', needs attention' : ''}`}
                 onClick={() => onGo(i)}
-                className={`flex items-center gap-2 rounded-full px-2.5 py-1.5 text-sm transition-colors ${
+                className={`flex min-h-11 items-center gap-2 rounded-full px-2.5 py-1.5 text-sm transition-colors ${
                   active ? 'bg-primary text-primary-foreground' : reachable ? 'text-foreground hover:bg-card' : 'text-muted-foreground opacity-60'
                 }`}
               >
@@ -468,7 +474,7 @@ export function SetupWizard({ yearId, year, semesters, holidays, notObserved = [
         <div>
           <p className="text-sm font-medium text-foreground">{EXAM_TYPES[key].name}</p>
           <p className="text-xs text-muted-foreground">
-            {EXAM_TYPES[key].closesSchool ? 'Held at school. No lessons and no attendance on these days.' : 'Held nationally. Lessons and attendance carry on.'}
+            {EXAM_TYPES[key].closesSchool ? 'Held at school. No lessons and no attendance on these days.' : 'Held nationally. Grade 12 has no lessons or attendance on these days. Every other grade carries on as normal.'}
           </p>
         </div>
         <RangeFields range={cur} yearEc={year.yearEc} resetKey={resetKeys[key] ?? 0} onChange={(r) => setDraft((d) => ({ ...d, exams: { ...d.exams, [key]: r } }))} />

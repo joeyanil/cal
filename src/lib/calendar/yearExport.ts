@@ -80,8 +80,11 @@ export function buildYearExportRows(entries: DailyTimelineEntry[], specialDays: 
   })
 }
 
-function csvCell(v: string): string {
-  return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+/** Text that starts with = + - or @ would be run as a formula by Excel; a
+ *  leading apostrophe makes the spreadsheet show it as plain text. */
+export function csvCell(v: string): string {
+  const safe = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
 }
 
 /** CSV text with a leading byte-order mark so Excel reads it correctly. */

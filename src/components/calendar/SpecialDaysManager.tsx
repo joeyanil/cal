@@ -168,31 +168,32 @@ export function SpecialDaysManager({ yearId, ethiopianYear, initial, canManage }
               <EthiopianDateField label="Last day" name="end" ethiopianYear={ethiopianYear} defaultValue={form.endDate || undefined} onValueChange={(v) => set({ endDate: v })} />
             )}
           </div>
-          <label className="flex items-center gap-2 text-sm text-foreground">
-            <input type="checkbox" checked={form.severalDays} onChange={(e) => set({ severalDays: e.target.checked })} />
+          <label className="flex min-h-11 items-center gap-2 text-sm text-foreground">
+            <input type="checkbox" className="h-5 w-5 shrink-0 accent-primary" checked={form.severalDays} onChange={(e) => set({ severalDays: e.target.checked })} />
             Runs for several days
           </label>
 
           <fieldset className="space-y-1 text-sm">
             <legend className="text-muted-foreground">Do students come to school?</legend>
-            <label className="mr-4 inline-flex items-center gap-2 text-foreground">
-              <input type="radio" name="come" checked={form.studentsCome === true} onChange={() => set({ studentsCome: true })} /> Yes, students come
+            <label className="mr-4 inline-flex min-h-11 items-center gap-2 text-foreground">
+              <input type="radio" className="h-5 w-5 shrink-0 accent-primary" name="come" checked={form.studentsCome === true} onChange={() => set({ studentsCome: true })} /> Yes, students come
             </label>
-            <label className="inline-flex items-center gap-2 text-foreground">
-              <input type="radio" name="come" checked={form.studentsCome === false} onChange={() => set({ studentsCome: false })} /> No, students stay home
+            <label className="inline-flex min-h-11 items-center gap-2 text-foreground">
+              <input type="radio" className="h-5 w-5 shrink-0 accent-primary" name="come" checked={form.studentsCome === false} onChange={() => set({ studentsCome: false })} /> No, students stay home
             </label>
             {form.studentsCome === null && <p className="text-xs text-muted-foreground">This one depends on the day, so please choose.</p>}
           </fieldset>
 
           <fieldset className="space-y-1 text-sm">
             <legend className="text-muted-foreground">Who does it affect?</legend>
-            <label className="mr-4 inline-flex items-center gap-2 text-foreground">
-              <input type="checkbox" checked={form.wholeSchool} onChange={(e) => set({ wholeSchool: e.target.checked })} /> Whole school
+            <label className="mr-4 inline-flex min-h-11 items-center gap-2 text-foreground">
+              <input type="checkbox" className="h-5 w-5 shrink-0 accent-primary" checked={form.wholeSchool} onChange={(e) => set({ wholeSchool: e.target.checked })} /> Whole school
             </label>
             {!form.wholeSchool &&
               GRADES.map((g) => (
-                <label key={g} className="mr-3 inline-flex items-center gap-1 text-foreground">
+                <label key={g} className="mr-3 inline-flex min-h-11 items-center gap-2 text-foreground">
                   <input
+                    className="h-5 w-5 shrink-0 accent-primary"
                     type="checkbox"
                     checked={form.grades.includes(g)}
                     onChange={(e) => set({ grades: e.target.checked ? [...form.grades, g].sort() : form.grades.filter((x) => x !== g) })}

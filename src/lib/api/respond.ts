@@ -26,6 +26,24 @@ export async function handleRoute(fn: () => Promise<Response>): Promise<Response
     return await fn()
   } catch (err) {
     if (isAppError(err)) {
+      // A web address with something that is not an id in it (for example
+      // /academic-years/hello): the database refuses it. That is a "not
+      // found", not a server fault.
+      if (err.httpStatus >= 500 && /invalid input syntax for type uuid/i.test(err.message)) {
+        return NextResponse.json(
+          { success: false, error: { code: 'NOT_FOUND', message: 'That item does not exist.' } },
+          { status: 404 },
+        )
+      }
+      // Never show database or server internals to the client: log them here,
+      // answer plainly (the error code stays, so support can find it).
+      if (err.httpStatus >= 500) {
+        console.error('[calendar-api] server error', err.code, err.message)
+        return NextResponse.json(
+          { success: false, error: { code: err.code, message: 'Something went wrong on our side. Please try again.' } },
+          { status: err.httpStatus },
+        )
+      }
       return NextResponse.json(
         { success: false, error: { code: err.code, message: err.message, details: err.details } },
         { status: err.httpStatus },
@@ -35,6 +53,13 @@ export async function handleRoute(fn: () => Promise<Response>): Promise<Response
       return NextResponse.json(
         { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid request body.', details: err.flatten() } },
         { status: 422 },
+      )
+    }
+    // A request body that is not valid JSON is the caller's mistake, not ours.
+    if (err instanceof SyntaxError) {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_JSON', message: 'The request body is not valid JSON.' } },
+        { status: 400 },
       )
     }
     // Never leak an unhandled error's internals to the client (mission

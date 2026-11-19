@@ -10,6 +10,7 @@ import type { CorrectableFact } from '@/components/calendar/CorrectionForm'
 import { ErrorState } from '@/components/calendar/ErrorState'
 import { Panel } from '@/components/ui/panel'
 export const dynamic = 'force-dynamic'
+export const metadata = { title: 'Correct a date — K2 Calendar' }
 
 interface Props {
   params: Promise<{ yearId: string }>

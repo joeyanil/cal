@@ -9,3 +9,7 @@ dist/
 .env*.local
 .DS_Store
 next-env.d.ts
+
+# local secrets for wrangler dev
+.dev.vars
+.dev.vars.*

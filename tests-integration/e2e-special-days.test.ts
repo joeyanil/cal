@@ -52,6 +52,45 @@ beforeAll(async () => {
   target = entries.filter((e: any) => e.teachingDay)[30].date
 })
 
+describe('hostile and broken requests are refused cleanly', () => {
+  it('broken JSON and wrong content type get a clear 400, never a server error', async () => {
+    const bad = await fetch(`${B}${base}/special-days`, { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: '{not json' })
+    expect(bad.status).toBe(400)
+    expect((await bad.json()).error.code).toBe('INVALID_JSON')
+    const plain = await fetch(`${B}${base}/special-days`, { method: 'POST', headers: { 'content-type': 'text/plain', cookie }, body: 'name=x' })
+    expect(plain.status).toBe(400)
+  })
+  it('an address with something that is not an id is a 404, and a missing year is a 404', async () => {
+    expect((await api('GET', '/api/v1/academic-years/not-a-uuid/special-days')).status).toBe(404)
+    expect((await api('GET', '/api/v1/academic-years/00000000-0000-0000-0000-000000000000/special-days')).status).toBe(404)
+    expect((await api('GET', '/api/v1/academic-years/not-a-uuid/events')).status).toBe(404)
+  })
+  it('hidden control characters are refused, other odd text is kept as plain text', async () => {
+    const nul = await api('POST', `${base}/special-days`, { situation: 'CEREMONY', name: 'a\u0000b', startDate: target, studentsCome: true })
+    expect(nul.status).toBe(422)
+    const odd = await api('POST', `${base}/special-days`, { situation: 'CEREMONY', name: '<script>alert(1)</script> =SUM(A1)', startDate: target, studentsCome: true })
+    expect(odd.status).toBe(201)
+    const csv = await (await fetch(`${B}${base}/export?format=csv`, { headers: { cookie } })).text()
+    expect(csv).toContain("'=SUM(A1)".slice(1)) // the formula text is present...
+    expect(csv).not.toMatch(/,"?=SUM/) // ...but never at the start of a spreadsheet cell
+    await api('DELETE', `${base}/special-days/${odd.data.specialDay.id}`)
+  })
+  it('server errors never show database details', async () => {
+    const r = await api('GET', `${base}/day-status?date=2027-03-05&grade=12`)
+    expect(JSON.stringify(r)).not.toMatch(/postgres|pgrst|syntax for type/i)
+  })
+  it('every page carries the security headers and API answers are never cached', async () => {
+    const page = await fetch(`${B}/login`)
+    expect(page.headers.get('x-frame-options')).toBe('DENY')
+    expect(page.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(page.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
+    expect(page.headers.get('x-powered-by')).toBeNull()
+    const apiRes = await fetch(`${B}/api/v1/academic-years`)
+    expect(apiRes.status).toBe(401)
+    expect(apiRes.headers.get('cache-control')).toBe('no-store')
+  })
+})
+
 describe('the new API over HTTP', () => {
   it('special days: add, list, bad input gets a clear 422, delete', async () => {
     const bad = await api('POST', `${base}/special-days`, { situation: 'CEREMONY', name: '', startDate: target, studentsCome: true })

@@ -91,6 +91,12 @@ export function validateSpecialDay(
   if (!(SPECIAL_DAY_SITUATIONS as readonly string[]).includes(draft.situation)) {
     err('SPECIAL_DAY_UNKNOWN_SITUATION', 'Pick one of the ready-made situations, or "My own".')
   }
+  // Hidden control characters (such as a null byte) break storage and make
+  // text look different from what it is: refuse them.
+  const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/
+  if (CONTROL.test(draft.name) || CONTROL.test(draft.customMessage ?? '')) {
+    err('SPECIAL_DAY_BAD_CHARACTERS', 'The name and wording can only contain normal letters, numbers and punctuation.')
+  }
   const name = draft.name.trim()
   if (name.length === 0) err('SPECIAL_DAY_NAME_MISSING', 'Give this day a name.')
   if (name.length > 120) err('SPECIAL_DAY_NAME_TOO_LONG', 'The name is too long (120 letters at most).')

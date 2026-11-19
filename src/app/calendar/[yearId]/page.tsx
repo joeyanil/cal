@@ -12,6 +12,7 @@ import { RebuildTimelineButton } from '@/components/calendar/RebuildTimelineButt
 import { YearStatusCard } from '@/components/calendar/YearStatusCard'
 import { formatEthiopian, hasBlockingErrors } from '@/lib/calendar'
 export const dynamic = 'force-dynamic'
+export const metadata = { title: 'Year overview — K2 Calendar' }
 
 interface Props {
   params: Promise<{ yearId: string }>
