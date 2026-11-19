@@ -9,6 +9,7 @@ import { CreateYearForm } from '@/components/calendar/CreateYearForm'
 import { ErrorState } from '@/components/calendar/ErrorState'
 import { formatEthiopian } from '@/lib/calendar'
 export const dynamic = 'force-dynamic'
+export const metadata = { title: 'Academic years — K2 Calendar' }
 
 export default async function CalendarDashboardPage() {
   try {

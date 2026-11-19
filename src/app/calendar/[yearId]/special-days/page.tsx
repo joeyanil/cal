@@ -7,6 +7,7 @@ import { can } from '@/lib/permissions/engine'
 import { SpecialDaysManager } from '@/components/calendar/SpecialDaysManager'
 import { ErrorState } from '@/components/calendar/ErrorState'
 export const dynamic = 'force-dynamic'
+export const metadata = { title: 'Special days — K2 Calendar' }
 
 interface Props {
   params: Promise<{ yearId: string }>

@@ -201,3 +201,15 @@ describe('reminder plan', () => {
     expect(detectMovedItems(events, known, off, d('2027-01-02'))).toEqual([])
   })
 })
+
+describe('hostile input', () => {
+  it('refuses hidden control characters in names and wording', () => {
+    const bad = validateSpecialDay({ situation: 'CEREMONY', name: 'a\u0000b', startDate: d('2027-03-05'), endDate: d('2027-03-05'), studentsCome: true, grades: null }, year)
+    expect(bad.map((i) => i.code)).toContain('SPECIAL_DAY_BAD_CHARACTERS')
+    const msg = validateSpecialDay({ situation: 'CUSTOM', name: 'ok', startDate: d('2027-03-05'), endDate: d('2027-03-05'), studentsCome: true, grades: null, customMessage: 'hi\u0007' }, year)
+    expect(msg.map((i) => i.code)).toContain('SPECIAL_DAY_BAD_CHARACTERS')
+  })
+  it('lets normal text, Amharic and emoji through', () => {
+    expect(validateSpecialDay({ situation: 'CEREMONY', name: 'የስፖርት ቀን 🏃', startDate: d('2027-03-05'), endDate: d('2027-03-05'), studentsCome: true, grades: null, customMessage: 'Line one\nLine two' }, year)).toEqual([])
+  })
+})
