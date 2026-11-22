@@ -6,7 +6,7 @@ import type { AuthContext } from '../auth/withAuth'
 import { loadCalendarSource } from './calendarSource.service'
 import { getDay, getCurrentTimeline } from './calendarTimeline.service'
 import { dayStatus, calendarPosition, buildYearExportRows, collectCalendarEvents } from '../calendar'
-import type { DayStatus, CalendarPosition, Grade, ISODate, YearExportRow, CalendarEvent } from '../calendar'
+import type { DayStatus, CalendarPosition, Grade, ISODate, YearExportRow, CalendarEvent, DailyTimelineEntry } from '../calendar'
 
 /**
  * "Is this a school day, and is attendance available (for this grade)?"
@@ -31,25 +31,24 @@ export async function getDayStatus(
   return dayStatus({ date, year: source.year, timelineDay, specialDays: source.specialDays, grade })
 }
 
-/** "Where are we today, and what is coming?" */
+/** "Where are we today, and what is coming?"
+ *  `timeline` may be passed in when the caller has already asked for it. */
 export async function getPosition(
   supabase: SupabaseClient<Database>,
   ctx: AuthContext,
   academicYearId: string,
   today: ISODate,
+  timeline?: Promise<DailyTimelineEntry[]>,
 ): Promise<CalendarPosition & { teachingDaysLeftInYear: number | null }> {
   if (!can(ctx, 'calendar.view')) throw new AppError('FORBIDDEN', 403)
-  const source = await loadCalendarSource(supabase, academicYearId)
+  // Both questions at once; a missing timeline just means no teaching-day count.
+  const entriesPromise = (timeline ?? getCurrentTimeline(supabase, ctx, academicYearId)).catch(() => [] as DailyTimelineEntry[])
+  const [source, entries] = await Promise.all([loadCalendarSource(supabase, academicYearId), entriesPromise])
   const position = calendarPosition(source, today)
-  let teachingDaysLeftInYear: number | null = null
-  try {
-    const entries = await getCurrentTimeline(supabase, ctx, academicYearId)
-    if (entries.length > 0 && position.daysLeftInYear !== null) {
-      teachingDaysLeftInYear = entries.filter((e) => e.date >= today && e.teachingDay).length
-    }
-  } catch {
-    // No published timeline yet: the count simply is not available.
-  }
+  const teachingDaysLeftInYear =
+    entries.length > 0 && position.daysLeftInYear !== null
+      ? entries.filter((e) => e.date >= today && e.teachingDay).length
+      : null
   return { ...position, teachingDaysLeftInYear }
 }
 

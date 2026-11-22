@@ -18,8 +18,7 @@ export default async function SpecialDaysPage({ params }: Props) {
   try {
     const ctx = await withAuth()
     const supabase = await createServerClient()
-    const year = await getAcademicYear(supabase, ctx, yearId)
-    const days = await listSpecialDays(supabase, ctx, yearId)
+    const [year, days] = await Promise.all([getAcademicYear(supabase, ctx, yearId), listSpecialDays(supabase, ctx, yearId)])
     return (
       <div className="space-y-6">
         <div>

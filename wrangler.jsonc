@@ -8,6 +8,13 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Run the worker next to the database. This app asks the database many
+  // small questions per page; with the worker far away each one costs a
+  // fraction of a second, so pages felt slow.
+  "placement": {
+    "mode": "targeted",
+    "hostname": "uoxfvysvoojomsjnvjyb.supabase.co"
+  },
   "observability": {
     "enabled": true
   }

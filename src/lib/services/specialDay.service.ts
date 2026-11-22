@@ -48,8 +48,9 @@ export async function listSpecialDays(
   academicYearId: string,
 ): Promise<SpecialDay[]> {
   if (!can(ctx, 'calendar.view')) throw new AppError('FORBIDDEN', 403)
-  await yearBounds(supabase, academicYearId) // a year that does not exist is a 404, not an empty list
-  return fetchSpecialDays(supabase, academicYearId)
+  // Both questions at once (a year that does not exist is a 404, not an empty list).
+  const [, days] = await Promise.all([yearBounds(supabase, academicYearId), fetchSpecialDays(supabase, academicYearId)])
+  return days
 }
 
 /** No permission check: for services that already checked one. */

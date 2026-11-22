@@ -25,9 +25,15 @@ export default async function YearViewPage({ params }: Props) {
   try {
     const ctx = await withAuth()
     const supabase = await createServerClient()
-    const year = await getAcademicYear(supabase, ctx, yearId)
-    const entries = await getCurrentTimeline(supabase, ctx, yearId)
-    const holidayState = await listHolidayState(supabase, ctx, yearId)
+    // Everything the page needs, asked for at the same time.
+    const timeline = getCurrentTimeline(supabase, ctx, yearId)
+    const [year, entries, holidayState, position, specialDays] = await Promise.all([
+      getAcademicYear(supabase, ctx, yearId),
+      timeline,
+      listHolidayState(supabase, ctx, yearId),
+      getPosition(supabase, ctx, yearId, schoolToday(), timeline),
+      listSpecialDays(supabase, ctx, yearId),
+    ])
     const holidays = buildHolidayList({
       occurrences: holidayState.occurrences,
       notObserved: holidayState.notObserved,
@@ -35,8 +41,6 @@ export default async function YearViewPage({ params }: Props) {
       yearEnd: year.endDate,
     })
 
-    const position = await getPosition(supabase, ctx, yearId, schoolToday())
-    const specialDays = await listSpecialDays(supabase, ctx, yearId)
 
     return (
       <div className="space-y-6">

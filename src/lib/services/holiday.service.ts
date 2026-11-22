@@ -105,40 +105,82 @@ export async function ensureFixedHolidays(
   academicYearId: string,
   yearEc: number,
   userId: string | null,
-): Promise<void> {
+  /** Holiday rows the caller has just read. When given, no extra read is made. */
+  knownRows?: Array<{ holiday_type_key: string; source: string; confirmed_at: string | null }>,
+): Promise<boolean> {
   const now = new Date().toISOString()
-  // One holiday at a time: if the database does not know a newer holiday yet
-  // (its migration has not been run), that one is skipped and the rest still
-  // go in.
-  for (const p of proposeFixedHolidayOccurrences(academicYearId, yearEc)) {
+  const proposals = proposeFixedHolidayOccurrences(academicYearId, yearEc)
+  let missing = proposals
+  let needsConfirm = true
+
+  // One cheap look first. On almost every page view nothing is missing, and
+  // the old way (one write per holiday, every time) cost a dozen round trips
+  // to the database and made every click slow.
+  try {
+    let existing = knownRows
+    if (!existing) {
+      const res = await supabase
+        .from('holiday_occurrences')
+        .select('holiday_type_key, source, confirmed_at')
+        .eq('academic_year_id', academicYearId)
+      existing = res.error ? undefined : (res.data ?? undefined)
+    }
+    if (existing) {
+      const have = new Set(existing.map((r) => r.holiday_type_key))
+      missing = proposals.filter((p) => !have.has(p.holidayTypeKey))
+      needsConfirm = existing.some((r) => r.source === 'AUTO_PROPOSED' && r.confirmed_at === null)
+      if (missing.length === 0 && !needsConfirm) return false
+    }
+  } catch {
+    // Could not look: fall through and do the full, safe version.
+  }
+
+  const rowFor = (p: (typeof proposals)[number]) => ({
+    academic_year_id: p.academicYearId,
+    holiday_type_key: p.holidayTypeKey,
+    date: p.date,
+    closes_school: p.closesSchool,
+    source: p.source,
+    confirmed_at: now,
+    confirmed_by: userId,
+  })
+  const conflict = { onConflict: 'academic_year_id,holiday_type_key', ignoreDuplicates: true } as const
+
+  if (missing.length > 0) {
+    // All the missing ones in one go. If the database refuses the batch
+    // (for example it does not know a newer holiday yet because its migration
+    // has not been run), fall back to one at a time so the rest still go in.
+    let batchOk = false
     try {
-      await supabase.from('holiday_occurrences').upsert(
-        {
-          academic_year_id: p.academicYearId,
-          holiday_type_key: p.holidayTypeKey,
-          date: p.date,
-          closes_school: p.closesSchool,
-          source: p.source,
-          confirmed_at: now,
-          confirmed_by: userId,
-        },
-        { onConflict: 'academic_year_id,holiday_type_key', ignoreDuplicates: true },
-      )
+      const { error } = await supabase.from('holiday_occurrences').upsert(missing.map(rowFor), conflict)
+      batchOk = !error
+    } catch {
+      batchOk = false
+    }
+    if (!batchOk) {
+      for (const p of missing) {
+        try {
+          await supabase.from('holiday_occurrences').upsert(rowFor(p), conflict)
+        } catch {
+          // Best effort by design.
+        }
+      }
+    }
+  }
+  if (needsConfirm || missing.length > 0) {
+    try {
+      // Older rows that were proposed but never clicked "Confirm".
+      await supabase
+        .from('holiday_occurrences')
+        .update({ confirmed_at: now, confirmed_by: userId })
+        .eq('academic_year_id', academicYearId)
+        .eq('source', 'AUTO_PROPOSED')
+        .is('confirmed_at', null)
     } catch {
       // Best effort by design.
     }
   }
-  try {
-    // Older rows that were proposed but never clicked "Confirm".
-    await supabase
-      .from('holiday_occurrences')
-      .update({ confirmed_at: now, confirmed_by: userId })
-      .eq('academic_year_id', academicYearId)
-      .eq('source', 'AUTO_PROPOSED')
-      .is('confirmed_at', null)
-  } catch {
-    // Best effort by design.
-  }
+  return true
 }
 
 export const confirmFixedHolidaySchema = z.object({
