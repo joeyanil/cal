@@ -13,12 +13,8 @@ export async function runCalendarValidation(
 ): Promise<ValidationIssue[]> {
   if (!can(ctx, 'calendar.view')) throw new AppError('FORBIDDEN', 403)
 
-  {
-    const { data: yearRow } = await supabase.from('academic_years').select('year_ec').eq('id', academicYearId).single()
-    if (yearRow) await ensureFixedHolidays(supabase, academicYearId, yearRow.year_ec, ctx.user.id)
-  }
-
-  const [{ data: year, error: yearError }, { data: semesters }, { data: holidays }, { data: exams }, { data: studentReturn }, { data: deps }] =
+  // One round of questions, all at the same time.
+  const [{ data: year, error: yearError }, { data: semesters }, { data: loadedHolidays }, { data: exams }, { data: studentReturn }, { data: deps }] =
     await Promise.all([
       supabase.from('academic_years').select().eq('id', academicYearId).single(),
       supabase.from('semesters').select().eq('academic_year_id', academicYearId).order('sem_order'),
@@ -28,6 +24,13 @@ export async function runCalendarValidation(
       supabase.from('calendar_dependencies').select().eq('academic_year_id', academicYearId),
     ])
   if (yearError || !year) throw new AppError('CALENDAR_YEAR_NOT_FOUND', 404)
+
+  // Make sure the permanent holidays are there, using the rows just read (no
+  // extra call). Only if something was added do the holidays need reading again.
+  let holidays = loadedHolidays
+  if (await ensureFixedHolidays(supabase, academicYearId, year.year_ec, ctx.user.id, loadedHolidays ?? undefined)) {
+    holidays = (await supabase.from('holiday_occurrences').select().eq('academic_year_id', academicYearId)).data
+  }
 
   const issues = validateCalendarConfiguration({
     academicYear: {

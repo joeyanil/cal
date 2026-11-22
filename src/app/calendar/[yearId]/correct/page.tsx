@@ -21,6 +21,8 @@ export default async function CorrectPage({ params }: Props) {
   try {
     const ctx = await withAuth()
     const supabase = await createServerClient()
+    const sourcePromise = loadCalendarSource(supabase, yearId)
+    sourcePromise.catch(() => undefined) // handled below if it is needed
     const year = await getAcademicYear(supabase, ctx, yearId)
     const header = (
       <div>
@@ -35,7 +37,7 @@ export default async function CorrectPage({ params }: Props) {
       return <div className="space-y-6">{header}<Panel><p className="text-sm text-muted-foreground">This year is not closed, so its dates can be changed in the ordinary setup.</p></Panel></div>
     }
 
-    const source = await loadCalendarSource(supabase, yearId)
+    const source = await sourcePromise
     const facts: CorrectableFact[] = []
     const add = (f: Omit<CorrectableFact, 'id'>) => facts.push({ ...f, id: `${f.factKind}|${f.factSemesterOrder ?? ''}|${f.factHolidayTypeKey ?? ''}|${f.factExamTypeKey ?? ''}` })
     const none = { factSemesterOrder: null, factHolidayTypeKey: null, factExamTypeKey: null } as const

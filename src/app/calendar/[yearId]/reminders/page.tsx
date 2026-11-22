@@ -2,10 +2,10 @@ import Link from 'next/link'
 import { withAuth } from '@/lib/auth/withAuth'
 import { createServerClient } from '@/lib/supabase/server'
 import { getAcademicYear } from '@/lib/services/academicYear.service'
-import { getReminderSettings, previewReminders } from '@/lib/services/calendarReminder.service'
+import { getReminderSettings } from '@/lib/services/calendarReminder.service'
 import { schoolToday } from '@/lib/services/today'
 import { can } from '@/lib/permissions/engine'
-import { collectCalendarEvents, dispatchKeyFor, previewDue, formatEthiopian } from '@/lib/calendar'
+import { addDays, collectCalendarEvents, dispatchKeyFor, previewDue, formatEthiopian } from '@/lib/calendar'
 import { loadCalendarSource } from '@/lib/services/calendarSource.service'
 import { ReminderSettingsPanel } from '@/components/calendar/ReminderSettingsPanel'
 import { ErrorState } from '@/components/calendar/ErrorState'
@@ -31,11 +31,29 @@ export default async function RemindersPage({ params }: Props) {
   try {
     const ctx = await withAuth()
     const supabase = await createServerClient()
-    const year = await getAcademicYear(supabase, ctx, yearId)
-    const settings = await getReminderSettings(supabase, ctx)
     const today = schoolToday()
-    const { schedule } = await previewReminders(supabase, ctx, yearId, today)
-    const events = collectCalendarEvents(await loadCalendarSource(supabase, yearId))
+    // One round of questions, all at the same time.
+    const [year, settings, source] = await Promise.all([
+      getAcademicYear(supabase, ctx, yearId),
+      getReminderSettings(supabase, ctx),
+      loadCalendarSource(supabase, yearId),
+    ])
+    const events = collectCalendarEvents(source)
+    const enabled = Object.fromEntries(settings.map((g) => [g.key, g]))
+    const schedule = events
+      .flatMap((e) =>
+        ([30, 15, 5] as const).map((days) => {
+          const g = enabled[e.group]
+          return {
+            key: dispatchKeyFor(e, days),
+            name: e.name,
+            days,
+            sendOn: addDays(e.date, -days),
+            willSend: !!g && g.enabled && (days === 30 ? g.send30 : days === 15 ? g.send15 : g.send5),
+          }
+        }),
+      )
+      .sort((a, b) => (a.sendOn < b.sendOn ? -1 : a.sendOn > b.sendOn ? 1 : 0))
     const byKey = new Map(events.flatMap((e) => ([30, 15, 5] as const).map((d) => [dispatchKeyFor(e, d), { e, d }] as const)))
     const coming = schedule.filter((s) => s.willSend && s.sendOn >= today).slice(0, 25)
 
