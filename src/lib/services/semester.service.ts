@@ -51,6 +51,9 @@ export async function setSemesterDates(
 ): Promise<Semester> {
   if (!can(ctx, 'calendar.manage')) throw new AppError('FORBIDDEN', 403)
   const { startDate, endDate } = setSemesterDatesSchema.parse(input)
+  if (startDate && endDate && startDate > endDate) {
+    throw new AppError('CALENDAR_DATE_RANGE_INVALID', 422, `Semester ${order} cannot end before it starts.`)
+  }
 
   await assertFactNotGovernedByDependency(supabase, academicYearId, { kind: 'SEMESTER_START', order })
   await assertFactNotGovernedByDependency(supabase, academicYearId, { kind: 'SEMESTER_END', order })

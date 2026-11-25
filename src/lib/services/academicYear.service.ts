@@ -111,6 +111,9 @@ export async function updateAcademicYearBoundary(
 ): Promise<AcademicYear> {
   if (!can(ctx, 'calendar.manage')) throw new AppError('FORBIDDEN', 403)
   const { startDate, endDate, ministryTargetDays } = updateAcademicYearBoundarySchema.parse(input)
+  if (startDate > endDate) {
+    throw new AppError('CALENDAR_DATE_RANGE_INVALID', 422, 'The last day of the school year cannot be before the first day.')
+  }
 
   const { data, error } = await supabase
     .from('academic_years')
