@@ -233,6 +233,18 @@ export function validateCalendarConfiguration(input: ValidationInput): Validatio
     })
   }
 
+  // --- WARNING: students return after Semester 1 has already started ----------
+  const firstSemester = semesters.find((s) => s.order === 1)
+  if (studentReturn && firstSemester?.startDate && isAfter(studentReturn.date, firstSemester.startDate)) {
+    issues.push({
+      severity: 'WARNING',
+      code: 'CALENDAR_STUDENT_RETURN_AFTER_SEMESTER_START',
+      message: `Student Return (${studentReturn.date}) is after Semester 1 has already started (${firstSemester.startDate}). Students normally return on or before the first day of the semester.`,
+      ref: { kind: 'STUDENT_RETURN' },
+      relatedRefs: [{ kind: 'SEMESTER_START', order: 1 }],
+    })
+  }
+
   // --- INFORMATION: holiday landing inside the derived break -------------------
   const semesterBreak = deriveSemesterBreak(semesters)
   if (semesterBreak) {

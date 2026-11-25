@@ -139,6 +139,11 @@ export const CALENDAR_ERROR_CODES = {
     meaning: 'A suggested dependency referenced a fact type that does not exist yet in the new year.',
   },
 
+  CALENDAR_DATE_RANGE_INVALID: {
+    httpStatus: 422,
+    meaning: 'A last day was entered before its first day.',
+  },
+
   // --- Special days and reminders -----------------------------------------------
   CALENDAR_SPECIAL_DAY_INVALID: {
     httpStatus: 422,

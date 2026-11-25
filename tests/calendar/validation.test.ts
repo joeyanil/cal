@@ -243,3 +243,39 @@ describe('validation: INFORMATION conditions', () => {
     expect(issues.some((i) => i.code === 'CALENDAR_USING_DEFAULT_BOUNDARY')).toBe(false)
   })
 })
+
+describe('validation: students return after Semester 1 has started', () => {
+  const run = (returnDate: string) =>
+    validateCalendarConfiguration({
+      academicYear: { ...YEAR, isDefaultBoundary: false },
+      semesters: SEMESTERS,
+      holidayOccurrences: completeHolidays(),
+      examInstances: completeExamInstances(),
+      studentReturn: { ...STUDENT_RETURN, date: isoDate(returnDate) },
+      dependencyRules: [],
+    })
+  it('warns when the return day is after the first day of Semester 1', () => {
+    expect(run('2026-11-10').map((i) => i.code)).toContain('CALENDAR_STUDENT_RETURN_AFTER_SEMESTER_START')
+  })
+  it('is quiet when students return on or before the first day', () => {
+    expect(run('2026-09-14').map((i) => i.code)).not.toContain('CALENDAR_STUDENT_RETURN_AFTER_SEMESTER_START')
+    expect(run('2026-09-11').map((i) => i.code)).not.toContain('CALENDAR_STUDENT_RETURN_AFTER_SEMESTER_START')
+  })
+})
+
+describe('validation: an exam sitting fully inside the wrong semester', () => {
+  it('is flagged for a Semester 1 exam placed in Semester 2', () => {
+    const exams = completeExamInstances().map((e) =>
+      e.examTypeKey === 'S1_FINAL' ? { ...e, startDate: isoDate('2027-03-08'), endDate: isoDate('2027-03-12') } : e,
+    )
+    const issues = validateCalendarConfiguration({
+      academicYear: { ...YEAR, isDefaultBoundary: false },
+      semesters: SEMESTERS,
+      holidayOccurrences: completeHolidays(),
+      examInstances: exams,
+      studentReturn: STUDENT_RETURN,
+      dependencyRules: [],
+    })
+    expect(issues.map((i) => i.code)).toContain('CALENDAR_EXAM_CROSSES_SEMESTER_BOUNDARY')
+  })
+})
